@@ -1,0 +1,57 @@
+Problemi da risolvere e cose da fare
+
+- codici da aggiornare:
+    creo funzione a parte per update delle coordinate + rinomino funzioni
+    codici da fare: circa tutti gli Exp + FW_2dim (tutti), FW_1dim_p1_5
+
+- troncata: 
+    potrei aggiungere la somma pre-calcolata (per gap)
+
+- in generale:
+    cambio nome / stile delle funzioni con quelle in FW-array
+    metto in archivio i codici non più usati!
+
+- esperimenti: confronto codice Peyre: trovo UOT ottimo (del loro codice) e confronto col nostro
+    controlla come mai il loro duale partendo dal nostro punto poi peggiora invece di migliorare...
+    Una volta capito come runnare il loro, confronto:
+    runno x esperimenti e comparo medie dei risultati (attento a come farlo: Wilcoxon?)
+
+
+
+
+# PARAMETRI PLOTS
+# cost_vs_time_p2(n1000_p2_delta0.001_eps0.001_iter1000)
+np.random.seed(0)
+n = 1000 
+mu = np.random.randint(0, 101, size = n)
+nu = np.random.randint(0, 101, size = n)
+c = np.abs(np.subtract.outer(np.arange(n), np.arange(n))) 
+p = 2                                                     
+M = n * (np.sum(mu) + np.sum(nu))                         
+max_iter = 1000                          
+delta = 0.001                                             
+eps = 0.001                                               
+
+# cost_vs_time_p2(n2000_p2_delta0.1_eps0.001_iter1000)
+np.random.seed(0)
+n = 2000 
+mu = np.random.randint(0, 501, size = n)
+nu = np.random.randint(0, 501, size = n)
+c = np.abs(np.subtract.outer(np.arange(n), np.arange(n))) 
+p = 2                                                     
+M = n * (np.sum(mu) + np.sum(nu))                         
+max_iter = 1000                          
+delta = 0.1                                             
+eps = 0.001  
+
+
+np.random.seed(0)
+n = 1000
+mu = np.random.randint(1, 2001, size = n)
+nu = np.random.randint(1, 2001, size = n)
+c = np.abs(np.subtract.outer(np.arange(n), np.arange(n))) 
+p = 1.5                                           
+M = 2 * (np.sum(mu) + np.sum(nu))                
+max_iter = 1000
+delta = 0.001                                             
+eps = 0.001                                               

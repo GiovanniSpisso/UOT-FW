@@ -1,21 +1,20 @@
 Problemi da risolvere e cose da fare
 
 - codici da aggiornare:
-    creo funzione a parte per update delle coordinate + rinomino funzioni
-    codici da fare: circa tutti gli Exp + FW_2dim (tutti), FW_1dim_p1_5
+    confronto + aggiorno FW_2dim (tutti)
 
 - troncata: 
-    potrei aggiungere la somma pre-calcolata (per gap)
+    potrei aggiungere la somma pre-calcolata (per gap) (mi sa è inefficiente)
 
-- in generale:
-    cambio nome / stile delle funzioni con quelle in FW-array
-    metto in archivio i codici non più usati!
-
-- esperimenti: confronto codice Peyre: trovo UOT ottimo (del loro codice) e confronto col nostro
-    controlla come mai il loro duale partendo dal nostro punto poi peggiora invece di migliorare...
+- esperimenti: 
+    confronto codice Peyre: trovo UOT ottimo (del loro codice) e confronto col nostro
+    controlla come mai il loro duale partendo dal nostro punto poi peggiora invece di migliorare.
+    capire perchè il loro costo è maggiore del nostro (sia duale che primale)
+    ATTENZIONE: sarebbe meglio runnare il loro codice con homogeneous ma fa peggio, capire come mai.
     Una volta capito come runnare il loro, confronto:
     runno x esperimenti e comparo medie dei risultati (attento a come farlo: Wilcoxon?)
 
+    fino a che dimensione fare confronto tra codici
 
 
 

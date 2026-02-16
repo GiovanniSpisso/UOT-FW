@@ -8,6 +8,7 @@ import pstats
 from FW_1dim import PW_FW_dim1, UOT_cost
 from FW_1dim_p2 import PW_FW_dim1_p2
 from FW_1dim_p1_5 import PW_FW_dim1_p1_5
+from FW_truncated import PW_FW_dim1_trunc, UOT_cost as UOT_cost_trunc, truncated_cost
 
 
 def make_data(n, seed=0):
@@ -53,6 +54,7 @@ if __name__ == '__main__':
       n_2d = int(sys.argv[2]) if len(sys.argv) > 2 else 10
       max_iter = int(sys.argv[3]) if len(sys.argv) > 3 else 1000
       p_generic = float(sys.argv[4]) if len(sys.argv) > 4 else 2  # p for FW_1dim and FW_2dim
+      R = int(sys.argv[5]) if len(sys.argv) > 5 else 3  # truncation radius for FW_truncated
       delta = 0.001
       eps = 0.001
 
@@ -63,6 +65,12 @@ if __name__ == '__main__':
       # Create 2D data
       _, _, _, mu2, nu2 = make_data(n_2d)
       M2 = n_2d * (np.sum(mu2) + np.sum(nu2))
+      
+      # Create truncated cost vector for FW_truncated
+      c_trunc = np.concatenate([
+            np.full(n_1d - abs(k), abs(k))
+            for k in range(-R + 1, R)
+      ])
 
       # List of solvers to profile: (display_name, callable, pos_args_tuple, kw_args_dict)
       solvers = [
@@ -71,6 +79,7 @@ if __name__ == '__main__':
             ('FW_1dim', PW_FW_dim1, (mu1, nu1, M1, p_generic, c), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim_p2', PW_FW_dim1_p2, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim_p1_5', PW_FW_dim1_p1_5, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_truncated', PW_FW_dim1_trunc, (mu1, nu1, M1, p_generic, c_trunc, R), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
       ]
 
       results = {}
@@ -98,6 +107,11 @@ if __name__ == '__main__':
             print(f"\nFinal cost (FW_1dim):    {cost_general:.10f}")
             print(f"Final cost (FW_1dim_p2): {cost_p2_val:.10f}")
             print(f"Final cost (FW_1dim_p1_5): {cost_p1_5_val:.10f}")
+      
+      if results.get('FW_truncated'):
+            xk_trunc, grad_trunc, x_marg_trunc, y_marg_trunc, s_i, s_j = results['FW_truncated']
+            cost_trunc = truncated_cost(xk_trunc, x_marg_trunc, y_marg_trunc, c_trunc, mu1, nu1, p_generic, s_i, s_j, R)
+            print(f"Final cost (FW_truncated): {cost_trunc:.10f}")
             
       print('\n' + '='*60)
       print('All profiling runs completed.\n')

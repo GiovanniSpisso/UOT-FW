@@ -5,12 +5,13 @@ import time
 
 from FW_Sejourne import solve_uot_with_cost_tracking, primal_uot_value_from_atoms
 from FW_truncated import x_init_trunc, grad_trunc, LMO_x, LMO_s, gap_calc_trunc, \
-    compute_gamma_max, step_calc as step_calc_trunc, update_grad_trunc, truncated_cost
+    compute_gamma_max, step_calc as step_calc_trunc, update_grad_trunc, truncated_cost, UOT_cost_upper
 
 # Parameters
 n = 500
 p = 1
-rho1 = 10.0
+max_iter = 10000
+rho1 = 1  # must be set to 1 to obtain same results as FW truncated
 R = 5  # Truncation radius
 
 # Generate data
@@ -18,6 +19,7 @@ np.random.seed(0)
 a = np.random.randint(1, 1001, size=n).astype(float)
 b = np.random.randint(1, 1001, size=n).astype(float)
 x, y = np.arange(n).astype(float), np.arange(n).astype(float)
+x_marg_in = np.sqrt(a * b) # greedy potential initialization
 
 ###########################################################
 #############  SOLVE_UOT with cost tracking  #############
@@ -28,8 +30,8 @@ print("="*60)
 
 start_time_sejourne = time.time()
 I, J, P, f, g, cost, costs_sejourne, primal_gaps_sejourne, dual_gaps_sejourne = solve_uot_with_cost_tracking(
-    a, b, x, y, p, rho1, niter=10000, tol=1e-5,
-    greed_init=False, line_search='default', stable_lse=True
+    a, b, x, y, p, rho1, niter=max_iter, tol=1e-5,
+    greed_init=True, line_search='default', stable_lse=True
 )
 end_time_sejourne = time.time()
 
@@ -77,6 +79,7 @@ s_i, s_j = np.zeros(n_points), np.zeros(n_points)
 grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, mask1, mask2, c_trunc, p, n_points, R)
 
 costs_trunc = [truncated_cost(xk, x_marg, y_marg, c_trunc, a, b, p, s_i, s_j, R)]
+cost_full_estimates = [UOT_cost_upper(costs_trunc[0], n_points, s_i, R)]
 times_trunc = [0.0]
 
 start_time_trunc = time.time()
@@ -146,14 +149,18 @@ for k in range(max_iter_fw - 1):
     v_coords = (i_FW, j_FW, i_AFW, j_AFW)
     grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 
                                              mask1, mask2, p, n_points, R, v_coords, vk_s)
+    cost_trunc = truncated_cost(xk, x_marg, y_marg, c_trunc, a, b, p, s_i, s_j, R)
+    costs_trunc.append(cost_trunc)
+    cost_full_estimate = UOT_cost_upper(cost_trunc, n_points, s_i, R)
+    cost_full_estimates.append(cost_full_estimate)
     
-    costs_trunc.append(truncated_cost(xk, x_marg, y_marg, c_trunc, a, b, p, s_i, s_j, R))
     elapsed_time = time.time() - start_time_trunc
     times_trunc.append(elapsed_time)
 
 end_time_trunc = time.time()
 
 print(f"Truncated FW final cost: {costs_trunc[-1]:.6f}")
+print(f"Truncated FW final cost estimate (upper bound): {cost_full_estimates[-1]:.6f}")
 print(f"Truncated FW number of iterations: {len(costs_trunc)}")
 print(f"Total time: {end_time_trunc - start_time_trunc:.4f}s")
 
@@ -172,12 +179,12 @@ ax1.plot(times_sejourne, costs_sejourne, linewidth=2.5,
         label="solve_uot", marker='o', 
         markevery=max(1, len(costs_sejourne)//20), markersize=6)
 
-ax1.plot(times_trunc, costs_trunc, linewidth=2.5, 
+ax1.plot(times_trunc, cost_full_estimates, linewidth=2.5, 
         label=f"Truncated FW (R={R})", marker='s', 
-        markevery=max(1, len(costs_trunc)//20), markersize=6)
+        markevery=max(1, len(cost_full_estimates)//20), markersize=6)
 
 ax1.set_yscale('log')
-y_max = costs_trunc[0] * 1000
+y_max = cost_full_estimates[0] * 1000
 ax1.set_ylim(top=y_max)
 
 ax1.set_xlabel("Time (seconds)", fontsize=12)
@@ -196,7 +203,7 @@ ax2.plot(times_sejourne, dual_gaps_sejourne, linewidth=2.5,
         markevery=max(1, len(dual_gaps_sejourne)//20), markersize=6)
 
 # Horizontal line for final truncated FW cost
-ax2.axhline(y=costs_trunc[-1], color='red', linestyle='--', linewidth=2, 
+ax2.axhline(y=cost_full_estimates[-1], color='red', linestyle='--', linewidth=2, 
             label=f"Final Truncated FW Cost")
 
 ax2.set_yscale('log')
@@ -212,7 +219,7 @@ plt.tight_layout()
 script_dir = os.path.dirname(os.path.abspath(__file__))
 plot_dir = os.path.join(script_dir, 'Plots', '1dim')
 os.makedirs(plot_dir, exist_ok=True)
-plot_path = os.path.join(plot_dir, f'Sejourne_comparison(n{n}_p{p}_rho{rho1}_R{R}).png')
+plot_path = os.path.join(plot_dir, f'Sejourne_comparison(n{n}_iter{max_iter}_R{R}).png')
 plt.savefig(plot_path, dpi=300, bbox_inches='tight')
 print(f"Plot saved to: {plot_path}")
 
@@ -231,6 +238,6 @@ print(f"  Iterations: {len(costs_sejourne)}")
 print(f"  Final cost: {costs_sejourne[-1]:.6f}")
 print(f"\nTruncated FW:")
 print(f"  Iterations: {len(costs_trunc)}")
-print(f"  Final cost: {costs_trunc[-1]:.6f}")
-print(f"\nCost difference: {abs(costs_sejourne[-1] - costs_trunc[-1]):.6f}")
+print(f"  Final cost: {cost_full_estimates[-1]:.6f}")
+print(f"\nCost difference: {abs(costs_sejourne[-1] - cost_full_estimates[-1]):.6f}")
 print("="*60)

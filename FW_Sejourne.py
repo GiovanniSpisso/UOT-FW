@@ -1,5 +1,6 @@
 import numpy as np
 from tqdm import tqdm
+from fastuot.uot1d import solve_ot, lazy_potential
 
 def kl_divergence(mu, nu, eps=1e-300):
     """KL(mu || nu) = sum_i [ mu_i * log(mu_i/nu_i) - mu_i + nu_i ].
@@ -67,6 +68,22 @@ def primal_uot_value_from_atoms(I, J, P, x, y, a, b, p=1, rho1=1.0, rho2=None):
     return primal_value
 
 
+def init_greed_uot_pers(a, b, x, y, p, rho1, rho2=None):
+    if rho2 is None:
+        rho2 = rho1
+
+    _, _, _, fb, gb, _ = solve_ot(a / np.sum(a), b / np.sum(b), x, y, p)
+    fc, gc = lazy_potential(x, y, p)
+
+    # Output best convex combination
+    #t = homogeneous_line_search(fb, gb, fc - fb, gc - gb, a, b, rho1, rho2,
+    #                            nits=3)
+    t = 0.1
+    ft = (1 - t) * fb + t * fc
+    gt = (1 - t) * gb + t * gc
+    return ft, gt
+
+
 def solve_uot_with_cost_tracking(a, b, x, y, p, rho1, rho2=None, niter=100, tol=1e-10,
                                   greed_init=False, line_search='default', stable_lse=True):
     """
@@ -84,6 +101,7 @@ def solve_uot_with_cost_tracking(a, b, x, y, p, rho1, rho2=None, niter=100, tol=
 
     # Initialize potentials
     if greed_init:
+        #f, g = init_greed_uot(x_marg, x_marg, x, y, p, rho1, rho2)
         f, g = init_greed_uot(a, b, x, y, p, rho1, rho2)
     else:
         f, g = np.zeros_like(a), np.zeros_like(b)
@@ -115,14 +133,12 @@ def solve_uot_with_cost_tracking(a, b, x, y, p, rho1, rho2=None, niter=100, tol=
         f = f + t * (fd - f)
         g = g + t * (gd - g)
 
-        # Compute primal cost at this iteration
-        primal_cost = primal_uot_value_from_atoms(I, J, P, x, y, a, b, p, rho1, rho2)
-        costs_per_iter.append(primal_cost)
+        # Compute primal cost at this iteration (using primal_uot_value_from_atoms)
+        primal_gap = primal_uot_value_from_atoms(I, J, P, x, y, a, b, p, rho1, rho2)
+        costs_per_iter.append(primal_gap)
         
-        # Compute gaps
-        dual_loss = invariant_dual_loss(f, g, a, b, rho1, rho2)
-        primal_gap = primal_cost
-        dual_gap = dual_loss
+        # Compute dual loss
+        dual_gap = invariant_dual_loss(f, g, a, b, rho1, rho2)
         
         primal_gaps.append(primal_gap)
         dual_gaps.append(dual_gap)
@@ -139,14 +155,12 @@ def solve_uot_with_cost_tracking(a, b, x, y, p, rho1, rho2=None, niter=100, tol=
     A, B = a * np.exp(-f / rho1), b * np.exp(-g / rho2)
     I, J, P, _, _, cost = solve_ot(A, B, x, y, p)
     
-    # Final primal cost
-    primal_cost_final = primal_uot_value_from_atoms(I, J, P, x, y, a, b, p, rho1, rho2)
-    costs_per_iter.append(primal_cost_final)
+    # Final primal cost (using primal_uot_value_from_atoms)
+    primal_gap_final = primal_uot_value_from_atoms(I, J, P, x, y, a, b, p, rho1, rho2)
+    costs_per_iter.append(primal_gap_final)
     
-    # Final gaps
-    dual_loss_final = invariant_dual_loss(f, g, a, b, rho1, rho2)
-    primal_gap_final = primal_cost_final
-    dual_gap_final = dual_loss_final
+    # Final dual loss
+    dual_gap_final = invariant_dual_loss(f, g, a, b, rho1, rho2)
     
     primal_gaps.append(primal_gap_final)
     dual_gaps.append(dual_gap_final)

@@ -1,6 +1,5 @@
 import numpy as np
 
-
 '''
 Power-like entropy function
 Parameters:

@@ -8,19 +8,21 @@ Parameters:
 '''
 def Up(x, p):
     x = np.asarray(x)
-
-    neg = x < 0
-    if np.any(neg & (x < -1e-14)):
-        print("Attention! x < 0")
-
-    x = np.maximum(x, 0)
-
+    x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
+    
     if p == 1:
-        return x * np.log(x) - x + 1
+        # For x == 0: result = 1 (limit)
+        result = np.ones_like(x, dtype=float)
+        mask_nonzero = (x > 0)
+        result[mask_nonzero] = x[mask_nonzero] * np.log(x[mask_nonzero]) - x[mask_nonzero] + 1
     elif p == 0:
-        return x - 1 - np.log(x)
+        result = np.ones_like(x, dtype=float)
+        mask_nonzero = (x > 0)
+        result[mask_nonzero] = x[mask_nonzero] - 1 - np.log(x[mask_nonzero])
     else:
-        return (x**p - p * (x - 1) - 1) / (p * (p - 1))
+        result = (x**p - p * (x - 1) - 1) / (p * (p - 1))
+    
+    return result
 
 
 '''
@@ -31,18 +33,18 @@ Parameters:
 '''
 def dUp_dx(x, p):
     x = np.asarray(x)
-
-    # clamp negatives to zero
-    neg = x < 0
-    if np.any(neg & (x < -1e-14)):
-        print("Attention! x < 0 (gradient)")
-
-    x = np.maximum(x, 0)
-
+    x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
+    
+    # For x == 0: return 0 (limit of derivative)
     if p == 1:
-        return np.log(x)
+        result = np.zeros_like(x, dtype=float)
+        mask_nonzero = (x > 0)
+        result[mask_nonzero] = np.log(x[mask_nonzero])
     else:
-        return (x**(p - 1) - 1) / (p - 1)
+        result = (x**(p - 1) - 1) / (p - 1)
+    
+    return result
+
 
 
 '''

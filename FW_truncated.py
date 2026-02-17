@@ -84,25 +84,6 @@ Parameters:
 def UOT_cost_upper(cost_trunc, n, si, R):
   K = n - 1 - R # Supposing c = |i-j|
   return cost_trunc + K * np.sum(si)
-  
-  # FIRST I HAVE TO CALCULATE THE FULL PLAN FROM
-  # THE TRUNCATED REPRESENTATION, THEN I CAN CALCULATE THE COST
-  #n = len(mu)
-  #full_pi = ...
-  #full_c = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
-  #full_x_marg = full_pi.sum(axis=1)
-  #full_y_marg = full_pi.sum(axis=0)
-
-  #C1 = np.multiply(full_c, full_pi).sum()
-
-  #mask_x = (mu != 0)
-  #mask_y = (nu != 0)
-  # Compute entropy only on non-zero measure indices
-  #cost_row = np.sum(mu[mask_x] * Up(full_x_marg[mask_x], p))
-  #cost_col = np.sum(nu[mask_y] * Up(full_y_marg[mask_y], p))
-
-  #C2 = cost_row + cost_col
-  #return C1 + C2
 
 
 def vector_to_matrix(vec, n, R):

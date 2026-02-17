@@ -51,18 +51,10 @@ print("="*60)
 n_points = len(a)
 
 # Create truncated cost matrix (vector representation)
-c_trunc = np.zeros(sum(n_points - abs(k) for k in range(-R + 1, R)))
-pos = 0
-for k in range(-R + 1, R):
-    m = n_points - abs(k)
-    if k >= 0:
-        i = np.arange(m)
-        j = i + k
-    else:
-        j = np.arange(m)
-        i = j - k
-    c_trunc[pos:pos + m] = np.abs(k) ** p
-    pos += m
+c_trunc = np.concatenate([
+    np.full(n_points - abs(k), abs(k))
+    for k in range(-R + 1, R)
+])
 
 # Truncated FW setup
 M = 2 * (np.sum(a) + np.sum(b))
@@ -205,7 +197,7 @@ ax2.plot(times_sejourne, dual_gaps_sejourne, linewidth=2.5,
 
 # Horizontal line for final truncated FW cost
 ax2.axhline(y=costs_trunc[-1], color='red', linestyle='--', linewidth=2, 
-            label=f"Final Truncated FW Cost ({costs_trunc[-1]:.6f})")
+            label=f"Final Truncated FW Cost")
 
 ax2.set_yscale('log')
 ax2.set_xlabel("Time (seconds)", fontsize=12)

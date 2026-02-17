@@ -4,26 +4,26 @@ Experiment: 1D Truncated Frank-Wolfe
 
 import numpy as np
 import time
-from FW_truncated import PW_FW_dim1_trunc, truncated_cost, UOT_cost
+from FW_truncated import PW_FW_dim1_trunc, truncated_cost, UOT_cost_upper
 
 
 # Parameters
-n = 5  # problem size
-p = 0.5    # entropy parameter
-R = 2     # truncation radius
+n = 500  # problem size
+p = 1    # entropy parameter
+R = 5     # truncation radius
 
 # Tolerance parameters
-delta = 0.001
+delta = 0.01
 eps = 0.001
-max_iter = 10
+max_iter = 1000
 
 
 # Generate test data
-np.random.seed(123)
-mu = np.random.randint(0, 10, size=n).astype(float)
-nu = np.random.randint(0, 10, size=n).astype(float)
+np.random.seed(0)
+mu = np.random.randint(1, 1001, size=n).astype(float)
+nu = np.random.randint(1, 1001, size=n).astype(float)
 
-# Cost function: Euclidean distance (only in non-truncated entries)
+# Cost function (only in non-truncated entries)
 c = np.concatenate([
     np.full(n - abs(k), abs(k))
     for k in range(-R + 1, R)
@@ -60,10 +60,11 @@ xk, grad_xk, x_marg, y_marg, s_i, s_j = result
 # Compute and print final cost + truncated cost
 
 
-cost = UOT_cost(xk, x_marg, y_marg, c, mu, nu, p)
-print(f"Final UOT cost: {cost:.4f}")
 cost_trunc = truncated_cost(xk, x_marg, y_marg, c, mu, nu, p, s_i, s_j, R)
 print(f"Final UOT cost (truncated): {cost_trunc:.4f}")
+cost = UOT_cost_upper(cost_trunc, n, s_i, R)
+print(f"Final UOT cost: {cost:.4f}")
+
 
 
 print("\nExperiment completed.")

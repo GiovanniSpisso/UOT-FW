@@ -28,10 +28,33 @@ if __name__ == '__main__':
     a, x, b, y = generate_random_measure(n, m)
 
     # params
-    p = 1.5
+    p = 1.5 
     rho = .1
     niter = 10000
     niter_ref = 200000
+
+    def normalize(x):
+        return x / np.sum(x)
+    
+    a = normalize(np.random.uniform(size=n))
+    b = normalize(np.random.uniform(size=m))
+    x = np.sort(np.random.uniform(size=n))
+    y = np.sort(np.random.uniform(size=m))
+
+    
+
+    #n, m = 100, 101
+    #np.random.seed(0)
+    #a = normalize(np.random.uniform(size=n))
+    #b = normalize(np.random.uniform(size=m))
+    #x = np.sort(np.random.uniform(size=n))
+    #y = np.sort(np.random.uniform(size=m))
+    #x, y = np.arange(n).astype(float), np.arange(n).astype(float)
+    # params
+    #p = 1.5
+    #rho = 0.1
+    #niter = 50000
+    #niter_ref = 100000
 
     ###########################################################################
     # Generate data plots

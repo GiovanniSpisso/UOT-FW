@@ -134,19 +134,21 @@ Parameters:
 '''
 def Up(x, p):
     x = np.asarray(x)
-
-    neg = x < 0
-    if np.any(neg & (x < -1e-14)):
-        print("Attention! x < 0")
-
-    x = np.maximum(x, 0)
-
+    x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
+    
     if p == 1:
-        return x * np.log(x) - x + 1
+        # For x == 0: result = 1 (limit)
+        result = np.ones_like(x, dtype=float)
+        mask_nonzero = (x > 0)
+        result[mask_nonzero] = x[mask_nonzero] * np.log(x[mask_nonzero]) - x[mask_nonzero] + 1
     elif p == 0:
-        return x - 1 - np.log(x)
+        result = np.ones_like(x, dtype=float)
+        mask_nonzero = (x > 0)
+        result[mask_nonzero] = x[mask_nonzero] - 1 - np.log(x[mask_nonzero])
     else:
-        return (x**p - p * (x - 1) - 1) / (p * (p - 1))
+        result = (x**p - p * (x - 1) - 1) / (p * (p - 1))
+    
+    return result
 
 
 '''
@@ -157,27 +159,17 @@ Parameters:
 '''
 def dUp_dx(x, p):
     x = np.asarray(x)
-
-    # clamp negatives to zero
-    neg = x < 0
-    if np.any(neg & (x < -1e-14)):
-        print("Attention! x < 0 (gradient)")
-
-    x = np.maximum(x, 0)
-
+    x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
+    
+    # For x == 0: return 0 (limit of derivative)
     if p == 1:
-        return np.log(x)
+        result = np.zeros_like(x, dtype=float)
+        mask_nonzero = (x > 0)
+        result[mask_nonzero] = np.log(x[mask_nonzero])
     else:
-        return (x**(p - 1) - 1) / (p - 1)
-
-
-'''
-Cost function
-Parameters:
-  x1, x2, y1, y2: coordinates of the transportation plan
-'''
-def cost(x1, x2, y1, y2):
-    return np.sqrt((x1 - y1)**2 + (x2 - y2)**2)
+        result = (x**(p - 1) - 1) / (p - 1)
+    
+    return result
 
 
 """
@@ -186,141 +178,99 @@ Parameters:
   pi: transportation plan
   x_marg, y_marg: X and Y marginals of the transportation plan
   mu, nu: measures
-  p: main parameter that defines the p-entropy
 """
-def UOT_cost_p2(pi, x_marg, y_marg, mu, nu, p):
-    def transport_cost(pi):
-      total = 0.0
-      n = pi.n
+def cost_dim2_p2(pi, x_marg, y_marg, mu, nu):
+    # pi is a 9 * n^2 matrix: 
+    # [(i,j)|(i-1,j)|(i,j-1)|(i+1,j)|(i,j+1)|(i-1,j-1)|(i+1,j-1)|(i-1,j+1)|(i+1,j+1)]
+    # cost: [0, 1, 1, 1, 1, sqrt(2), sqrt(2), sqrt(2), sqrt(2)]
+    cost_transport = np.sum(pi[1] + pi[2] + pi[3] + pi[4]) + np.sqrt(2) * np.sum(pi[5] + pi[6] + pi[7] + pi[8])
 
-      I, J = np.meshgrid(np.arange(n), np.arange(n), indexing="ij")
+    mask_x = (mu != 0)
+    mask_y = (nu != 0)
+    # Compute entropy only on non-zero measure indices
+    term_x = np.sum(mu[mask_x] * Up(x_marg[mask_x], 2))
+    term_y = np.sum(nu[mask_y] * Up(y_marg[mask_y], 2))
 
-      for (di, dj), block in pi.blocks.items():
-        K = I + di
-        L = J + dj
-
-        valid = (0 <= K) & (K < n) & (0 <= L) & (L < n)
-
-        total += np.sum(
-            cost(I[valid], J[valid], K[valid], L[valid]) *
-            block[valid])
-
-      return total
-
-    def marginal_penalty(x_marg, y_marg, mu, nu, p):
-      term_x = np.sum(mu * Up(x_marg, p))
-      term_y = np.sum(nu * Up(y_marg, p))
-      return term_x + term_y
-
-    cost_transport = transport_cost(pi)
-    cost_marginals = marginal_penalty(x_marg, y_marg, mu, nu, p)
-    return cost_transport + cost_marginals
+    return cost_transport + term_x + term_y
 
 
 '''
 Initial transportation plan + marginals (only for p = 2)
 Parameters:
   mu, nu: measures
+  n: sample points
 '''
-def x_init_p2(mu, nu):
+def x_init_dim2_p2(mu, nu, n):
   n = len(mu)
-  den = mu + nu
-  x0 = np.zeros((n,n), dtype=float)
-  x_marg = np.zeros((n,n), dtype=float)
-  y_marg = np.zeros((n,n), dtype=float)
+  x0 = np.zeros((9, n, n)) # 9 matrices of shape n * n
+  x_marg = np.zeros((n,n))
+  y_marg = np.zeros((n,n))
 
   mask1 = (mu != 0)
   mask2 = (nu != 0)
+  mask = mask1 & mask2
 
-  x_marg[mask1] = 2 * nu[mask1] / den[mask1]
-  y_marg[mask2] = 2 * mu[mask2] / den[mask2]
+  # Compute main diagonal values (indices in the first n^2 entries)
+  diag_vals = np.zeros((n,n))
+  diag_vals[mask] = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
 
-  x0[mask1] = 2 * mu[mask1] * nu[mask1] / den[mask1]
-  x0[mask2] = 2 * mu[mask2] * nu[mask2] / den[mask2]
-  x = TriDiagonal2D(
-      dist0 = x0,
-      dist1_0 = np.zeros((n, n)),
-      dist1_1 = np.zeros((n, n)),
-      dist1_2 = np.zeros((n, n)),
-      dist1_3 = np.zeros((n, n)),
-      dist2_0 = np.zeros((n, n)),
-      dist2_1 = np.zeros((n, n)),
-      dist2_2 = np.zeros((n, n)),
-      dist2_3 = np.zeros((n, n))
-  )
-  return x, x_marg, y_marg, mask1, mask2
+  x0[0] = diag_vals
+  
+  x_marg[mask] = diag_vals[mask] / mu[mask]
+  y_marg[mask] = diag_vals[mask] / nu[mask]
+  
+  return x0, x_marg, y_marg, mask1, mask2
 
 
 '''
-Function to define the gradient of UOT with respect to one coordinate (only for p = 2)
+Function to define the gradient of UOT (only for p = 2)
 Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
   mask1, mask2: masks for the zero coordinates
-  n: dimension
+  n: sample points
 '''
-def grad_init_p2(x_marg, y_marg, mask1, mask2, n):
-    # precompute marginals
-    gX = np.zeros((n, n))
-    gY = np.zeros((n, n))
+def grad_dim2_p2(x_marg, y_marg, mask1, mask2, n):
+    # Compute derivatives only where masks are true
+    dx = np.zeros((n, n))
+    dy = np.zeros((n, n))
+    dx[mask1] = dUp_dx(x_marg[mask1], 2)
+    dy[mask2] = dUp_dx(y_marg[mask2], 2)
 
-    gY[mask1] = dUp_dx(x_marg[mask1], 2)  # p = 2
-    gX[mask2] = dUp_dx(y_marg[mask2], 2)  # p = 2
-
-    # initialize blocks
-    dist0 = np.zeros((n,n))    # (i,j)
-
-    dist1_0 = np.zeros((n,n))  # (i-1,j)
-    dist1_1 = np.zeros((n,n))  # (i,j-1)
-    dist1_2 = np.zeros((n,n))  # (i+1,j)
-    dist1_3 = np.zeros((n,n))  # (i,j+1)
-
-    dist2_0 = np.zeros((n,n))  # (i-1,j-1)
-    dist2_1 = np.zeros((n,n))  # (i+1,j-1)
-    dist2_2 = np.zeros((n,n))  # (i-1,j+1)
-    dist2_3 = np.zeros((n,n))  # (i+1,j+1)
+    # Initialize 9 * n^2 gradient vector
+    grad = np.zeros((9, n, n))
 
     # fill distance-0 neighbors
     m = mask1 & mask2
-    dist0[m] = gY[m] + gX[m]
+    grad[0][m] = dy[m] + dx[m]
 
     # fill distance-1 neighbors
     m = mask1[1:, :] & mask2[:-1, :]
-    dist1_0[1:, :][m] = 1 + gY[1:, :][m] + gX[:-1, :][m]
+    grad[1][1:, :][m] = 1 + dy[1:, :][m] + dx[:-1, :][m]
 
     m = mask1[:, 1:] & mask2[:, :-1]
-    dist1_1[:, 1:][m] = 1 + gY[:, 1:][m] + gX[:, :-1][m]
+    grad[2][:, 1:][m] = 1 + dy[:, 1:][m] + dx[:, :-1][m]
 
     m = mask1[:-1, :] & mask2[1:, :]
-    dist1_2[:-1, :][m] = 1 + gY[:-1, :][m] + gX[1:, :][m]
+    grad[3][:-1, :][m] = 1 + dy[:-1, :][m] + dx[1:, :][m]
 
     m = mask1[:, :-1] & mask2[:, 1:]
-    dist1_3[:, :-1][m] = 1 + gY[:, :-1][m] + gX[:, 1:][m]
+    grad[4][:, :-1][m] = 1 + dy[:, :-1][m] + dx[:, 1:][m]
 
     # fill distance-2 diagonals
     sqrt2 = np.sqrt(2)
     m = mask1[1:, 1:] & mask2[:-1, :-1]
-    dist2_0[1:, 1:][m] = sqrt2 + gY[1:, 1:][m] + gX[:-1, :-1][m]
+    grad[5][1:, 1:][m] = sqrt2 + dy[1:, 1:][m] + dx[:-1, :-1][m]
 
     m = mask1[:-1, 1:] & mask2[1:, :-1]
-    dist2_1[:-1, 1:][m] = sqrt2 + gY[:-1, 1:][m] + gX[1:, :-1][m]
+    grad[6][:-1, 1:][m] = sqrt2 + dy[:-1, 1:][m] + dx[1:, :-1][m]
 
     m = mask1[1:, :-1] & mask2[:-1, 1:]
-    dist2_2[1:, :-1][m] = sqrt2 + gY[1:, :-1][m] + gX[:-1, 1:][m]
+    grad[7][1:, :-1][m] = sqrt2 + dy[1:, :-1][m] + dx[:-1, 1:][m]
 
     m = mask1[:-1, :-1] & mask2[1:, 1:]
-    dist2_3[:-1, :-1][m] = sqrt2 + gY[:-1, :-1][m] + gX[1:, 1:][m]
+    grad[8][:-1, :-1][m] = sqrt2 + dy[:-1, :-1][m] + dx[1:, 1:][m]
 
-    return TriDiagonal2D(
-        dist0=dist0,
-        dist1_0=dist1_0,
-        dist1_1=dist1_1,
-        dist1_2=dist1_2,
-        dist1_3=dist1_3,
-        dist2_0=dist2_0,
-        dist2_1=dist2_1,
-        dist2_2=dist2_2,
-        dist2_3=dist2_3
-    )
+    return grad
 
 
 '''

@@ -199,21 +199,21 @@ def opt_step(x_marg, y_marg, c, mu, nu, i):
 Armijo stepsize
 Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
-  grad: gradient of UOT
+  grad_UOT: gradient of UOT
   mu, nu: measures
   v: search direction
   c: cost function
   p: main parameter that defines the p-entropy
   theta, beta, gamma: parameters for the Armijo stepsize
 '''
-def armijo(x_marg, y_marg, grad, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma = 0.5):
+def armijo(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma = 0.5):
   # get the indices of the selected FW and AFW vertices
   FW_i, FW_j, AFW_i, AFW_j = v
 
   if FW_i != -1:
-    inner = grad[FW_i, FW_j]
+    inner = grad_UOT[FW_i, FW_j]
     if AFW_i != -1:
-      inner -= grad[AFW_i, AFW_j]
+      inner -= grad_UOT[AFW_i, AFW_j]
       diff = (theta * (c[FW_i, FW_j] - c[AFW_i, AFW_j]) + (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p))*mu[FW_i] +
               (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j] + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
               + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
@@ -231,7 +231,7 @@ def armijo(x_marg, y_marg, grad, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma =
                 (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j])
 
   elif AFW_i != -1:
-      inner = -grad[AFW_i, AFW_j]
+      inner = -grad_UOT[AFW_i, AFW_j]
       diff = (- theta * c[AFW_i, AFW_j] + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
               + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
       while diff > beta*theta*inner:
@@ -240,6 +240,7 @@ def armijo(x_marg, y_marg, grad, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma =
                 + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
 
   return theta
+
 
 '''
 Stepsize calculation
@@ -252,11 +253,11 @@ Parameters:
   p: main parameter
   theta, beta, gamma: Armijo parameters
 '''
-def step_calc(x_marg, y_marg, grad, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma = 0.5):
+def step_calc(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma = 0.5):
   if p == 2:
     return min(opt_step(x_marg, y_marg, c, mu, nu, v), theta)
   else:
-    return armijo(x_marg, y_marg, grad, mu, nu, v, c, p, theta = theta, beta = beta, gamma = gamma)
+    return armijo(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = theta, beta = beta, gamma = gamma)
 
 
 '''
@@ -270,26 +271,23 @@ Parameters:
   p               : main parameter that defines the p-entropy
 '''
 def update_grad(x_marg, y_marg, grad_UOT, mask1, mask2, c, v, p):
-  FW_i, FW_j, AFW_i, AFW_j = v
-  if FW_i != -1:
-    idx = mask2
-    grad_UOT[FW_i, idx] = (c[FW_i, idx] + dUp_dx(y_marg[idx], p) + dUp_dx(x_marg[FW_i], p))
-    idx = mask1
-    grad_UOT[idx, FW_j] = (c[idx, FW_j] + dUp_dx(y_marg[FW_j], p) + dUp_dx(x_marg[idx], p))
-  if AFW_i != -1:
-    idx = mask2
-    grad_UOT[AFW_i, idx] = (c[AFW_i, idx] + dUp_dx(y_marg[idx], p) + dUp_dx(x_marg[AFW_i], p))
-    idx = mask1
-    grad_UOT[idx, AFW_j] = (c[idx, AFW_j] + dUp_dx(y_marg[AFW_j], p) + dUp_dx(x_marg[idx], p))
-  return grad_UOT
+    FW_i, FW_j, AFW_i, AFW_j = v
+    if FW_i != -1:
+        grad_UOT[FW_i, mask2] = (c[FW_i, mask2] + dUp_dx(y_marg[mask2], p) + dUp_dx(x_marg[FW_i], p))
+        grad_UOT[mask1, FW_j] = (c[mask1, FW_j] + dUp_dx(y_marg[FW_j], p) + dUp_dx(x_marg[mask1], p))
+    if AFW_i != -1:
+        grad_UOT[AFW_i, mask2] = (c[AFW_i, mask2] + dUp_dx(y_marg[mask2], p) + dUp_dx(x_marg[AFW_i], p))
+        grad_UOT[mask1, AFW_j] = (c[mask1, AFW_j] + dUp_dx(y_marg[AFW_j], p) + dUp_dx(x_marg[mask1], p))
+    
+    return grad_UOT
 
 
 '''
 Update sum_term by adding/subtracting contributions from affected rows/columns
 Parameters:
   sum_term: current sum term
-  grad_xk: gradient vector (3n)
-  xk: current transportation plan vector (3n)
+  grad_xk: gradient vector
+  xk: current transportation plan vector
   mask1, mask2: masks for non-zero measures
   rows, cols: affected rows and columns (as sets/lists of indices)
   sign: +1 to add contributions, -1 to subtract contributions
@@ -307,6 +305,18 @@ def update_sum_term(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=1):
   return sum_term
 
 
+'''
+Update xk, x_marg, y_marg according to the computed step size and search direction
+Parameters:
+  xk: current transportation plan
+  x_marg, y_marg: current marginals
+  grad_xk: current gradient
+  mu, nu: measures
+  M: upper bound for generalized simplex
+  vk: search direction (FW_i, FW_j, AFW_i, AFW_j)
+  c: cost function
+  p: main parameter that defines the p-entropy
+'''
 def apply_step(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, c, p):
   FW_i, FW_j, AFW_i, AFW_j = vk  # coordinates
   

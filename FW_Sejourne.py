@@ -31,7 +31,7 @@ def kl_divergence(mu, nu, eps=1e-300):
     return result
 
 
-def primal_uot_value_from_atoms(I, J, P, x, y, a, b, p=1, rho1=1.0, rho2=None):
+def primal_uot_value_from_atoms(I, J, P, x, y, a, b, p=1.0, rho1=1.0, rho2=None):
     """Compute primal UOT (KL case) value from atoms I,J,P (I,J are integer arrays, P are masses).
     x,y are supports (used only for cost), a,b are original histograms (weights).
     p is cost exponent. rho1,rho2 are KL penalty weights. If rho2 is None set to rho1.

@@ -1,8 +1,8 @@
 import numpy as np
 
-x = np.array([0,1,2,3,4,5,6,7,8])
-v = 5
+idx = np.arange(3)
+di = (idx[:, None] - idx[None, :]) ** 2
+dj = (idx[:, None] - idx[None, :]) ** 2
+c2d = np.sqrt(di[:, None, :, None] + dj[None, :, None, :])
 
-print(x[v])
-print(x[(v+3)%9])
-print(x[(v+6)%9]) 
+print(c2d)

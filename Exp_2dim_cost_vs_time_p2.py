@@ -2,8 +2,9 @@ import time
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from FW_2dim import x_init, grad_init, direction, gap_calc, step_calc, \
-    grad_update, UOT_cost
+from FW_2dim import x_init_dim2 as x_init, grad_dim2 as grad_init, \
+  LMO_dim2 as direction, gap_calc_dim2 as gap_calc, step_calc_dim2 as step_calc, \
+  grad_update_dim2 as grad_update, UOT_cost_dim2 as UOT_cost
 from FW_2dim_p2 import x_init_p2, grad_init_p2, direction_p2, gap_calc_p2, \
     step_calc_p2, grad_update_p2
 

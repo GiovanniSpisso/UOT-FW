@@ -449,7 +449,6 @@ Parameters:
   max_iter: max iterations
   delta, eps: tolerance
 '''
-
 def PW_FW_dim1_p2(mu, nu, M,
                   max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]

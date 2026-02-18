@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from fastuot.uot1d import solve_ot, rescale_potentials, invariant_dual_loss, \
     homogeneous_line_search, solve_uot
 from fastuot.examples_paper.utils_examples import generate_random_measure
+from FW_Sejourne import primal_uot_value_from_atoms
 
 path = os.getcwd() + "/output/"
 if not os.path.isdir(path):
@@ -47,7 +48,7 @@ if __name__ == '__main__':
         f, g = np.zeros_like(a), np.zeros_like(b)
         transl = rescale_potentials(f, g, a, b, rho, rho)
         f, g = f + transl, g - transl
-        dual_fw, norm_fw = [], []
+        dual_fw, norm_fw, prim_fw = [], [], []
         time_fw = []
         for k in range(niter):
             t0 = time.time()
@@ -67,6 +68,7 @@ if __name__ == '__main__':
             time_fw.append(time.time() - t0)
             norm_fw.append(np.log10(np.amax(np.abs(f - fr))))
             dual_fw.append(invariant_dual_loss(f, g, a, b, rho))
+            prim_fw.append(primal_uot_value_from_atoms(I, J, P, x, y, a, b, p, rho))
 
         #######################################################################
         # Vanilla FW with homogeneous line search
@@ -75,7 +77,7 @@ if __name__ == '__main__':
         f, g = np.zeros_like(a), np.zeros_like(b)
         transl = rescale_potentials(f, g, a, b, rho, rho)
         f, g = f + transl, g - transl
-        dual_hfw, norm_hfw = [], []
+        dual_hfw, norm_hfw, prim_hfw = [], [], []
         time_hfw = []
         for k in range(niter):
             t0 = time.time()
@@ -97,6 +99,7 @@ if __name__ == '__main__':
             time_hfw.append(time.time() - t0)
             norm_hfw.append(np.log10(np.amax(np.abs(f - fr))))
             dual_hfw.append(invariant_dual_loss(f, g, a, b, rho))
+            prim_hfw.append(primal_uot_value_from_atoms(I, J, P, x, y, a, b, p, rho))
 
         #######################################################################
         # Pairwise FW
@@ -105,7 +108,7 @@ if __name__ == '__main__':
         f, g = np.zeros_like(a), np.zeros_like(b)
         transl = rescale_potentials(f, g, a, b, rho, rho)
         f, g = f + transl, g - transl
-        dual_pfw, norm_pfw = [], []
+        dual_pfw, norm_pfw, prim_pfw = [], [], []
         time_pfw = []
         atoms = [[f, g]]
         weights = [1.]
@@ -159,7 +162,7 @@ if __name__ == '__main__':
             norm_pfw.append(np.log10(np.amax(np.abs(f - fr))))
             # norm_pfw.append(np.log(hilbert_norm(f - fr)))
             dual_pfw.append(invariant_dual_loss(f, g, a, b, rho))
-
+            prim_pfw.append(primal_uot_value_from_atoms(I, J, P, x, y, a, b, p, rho))
         # save data
         t_fw = np.median(np.array(time_fw))
         t_hfw = np.median(np.array(time_hfw))
@@ -172,6 +175,12 @@ if __name__ == '__main__':
                 np.array(norm_hfw))
         np.save(path + "err_pfw.npy",
                 np.array(norm_pfw))
+        np.save(path + "prim_fw.npy",
+                np.array(prim_fw))
+        np.save(path + "prim_hfw.npy",
+                np.array(prim_hfw))
+        np.save(path + "prim_pfw.npy",
+                np.array(prim_pfw))
 
     lw = 1.5
     colors = ['cornflowerblue', 'indianred', 'mediumseagreen']
@@ -197,4 +206,25 @@ if __name__ == '__main__':
     plt.legend(fontsize=11)
     plt.tight_layout()
     plt.savefig(path + f'plot_fw_comparison.pdf')
+    plt.show()
+
+    # Plot primal values
+    prim_fw = np.load(path + "prim_fw.npy")
+    prim_hfw = np.load(path + "prim_hfw.npy")
+    prim_pfw = np.load(path + "prim_pfw.npy")
+    plt.figure(figsize=(4, 2.5))
+    plt.plot(t_pfw * np.arange(1., len(prim_pfw) + 1),  np.array(prim_pfw),
+             label='PFW', c=colors[2], linewidth=lw)
+    plt.plot(t_hfw * np.arange(1., len(prim_hfw) + 1),  np.array(prim_hfw),
+             label='LFW', c=colors[1], linewidth=lw)
+    plt.plot(t_fw * np.arange(1., len(prim_fw) + 1),  np.array(prim_fw),
+             label='FW', c=colors[0], linewidth=lw)
+    plt.xlabel('Time', fontsize=15)
+    plt.grid()
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.ylabel(r'Primal Value', fontsize=15)
+    plt.legend(fontsize=11)
+    plt.tight_layout()
+    plt.savefig(path + f'plot_fw_primal.pdf')
     plt.show()

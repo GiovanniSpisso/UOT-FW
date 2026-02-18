@@ -10,7 +10,7 @@ from FW_truncated import x_init_trunc, grad_trunc, LMO_x, LMO_s, gap_calc_trunc,
 n = 500
 p = 1
 rho1 = 1.0  # must be set to 1 to obtain same results as FW truncated
-R = 5  # Truncation radius
+R = 7  # Truncation radius
 max_iter = 1000000
 
 # Generate data
@@ -61,7 +61,7 @@ c_trunc = np.concatenate([
 # Truncated FW setup
 M = 2 * (np.sum(a) + np.sum(b))
 max_iter_fw = 10000
-delta = 0.01
+delta = 0.001
 eps = 0.001
 
 # Initial transportation plan, marginals, cost and gradient

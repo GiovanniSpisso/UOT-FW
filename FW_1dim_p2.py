@@ -70,7 +70,7 @@ def cost_p2(pi, x_marg, y_marg, mu, nu):
 
 
 '''
-Utilities for 3n vector representation of banded matrix (R=2)
+Utilities for 3n vector representation of banded matrix
 Vector layout: [upper_diag (n) | main_diag (n) | lower_diag (n)]
 Constraint: upper_diag[0] = 0, lower_diag[n-1] = 0
 '''
@@ -453,7 +453,7 @@ def PW_FW_dim1_p2(mu, nu, M,
                   max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
 
-  # initial transportation plan, marginals and gradient initialization
+  # transportation plan, marginals and gradient initialization
   xk, x_marg, y_marg, mask1, mask2 = x_init_p2(mu, nu, n)
   grad_xk = grad_p2(x_marg, y_marg, mask1, mask2, n)
   

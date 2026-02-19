@@ -332,31 +332,33 @@ def grad_update_dim2(x_marg, y_marg, grad_UOT, mask1, mask2, c, v, p):
     return grad_UOT
 
 
-'''
-Update sum_term by adding/subtracting contributions from affected rows/columns
+"""
+Update sum term for 4D tensor (n, n, n, n) with 2D masks.
 Parameters:
-  sum_term: current sum term
-  grad_xk: gradient vector (3n)
-  xk: current transportation plan vector (3n)
-  mask1, mask2: masks for non-zero measures
-  rows, cols: affected rows and columns (as sets/lists of indices)
-  sign: +1 to add contributions, -1 to subtract contributions
-'''
+  sum_term: Current sum value
+  grad_xk: Gradient tensor (n, n, n, n)
+  xk: Current plan tensor (n, n, n, n)
+  mask1: Boolean mask for source coordinates (n, n)
+  mask2: Boolean mask for target coordinates (n, n)
+  rows: Set of affected source coordinate pairs {(x1, x2), ...}
+  cols: Set of affected target coordinate pairs {(y1, y2), ...}
+  sign: +1 or -1
+"""
 def update_sum_term_dim2(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=1):
-  # Update contributions for affected target coordinates (y1, y2)
-  for y1, y2 in cols:
-    sum_term += sign * np.sum(grad_xk[:, :, y1, y2] * xk[:, :, y1, y2])
-
-  # Update contributions for affected source coordinates (x1, x2)
-  for x1, x2 in rows:
-    sum_term += sign * np.sum(grad_xk[x1, x2, :, :] * xk[x1, x2, :, :])
-
-  # Remove double-counted intersections
-  for x1, x2 in rows:
+    # Update contributions for affected target coordinates (y1, y2)
     for y1, y2 in cols:
-      sum_term -= sign * grad_xk[x1, x2, y1, y2] * xk[x1, x2, y1, y2]
+        sum_term += sign * np.sum(grad_xk[mask1, y1, y2] * xk[mask1, y1, y2])
 
-  return sum_term
+    # Update contributions for affected source coordinates (x1, x2)
+    for x1, x2 in rows:
+        sum_term += sign * np.sum(grad_xk[x1, x2, mask2] * xk[x1, x2, mask2])
+
+    # Remove double-counted intersections
+    for x1, x2 in rows:
+        for y1, y2 in cols:
+            sum_term -= sign * grad_xk[x1, x2, y1, y2] * xk[x1, x2, y1, y2]
+
+    return sum_term
 
 
 '''
@@ -408,7 +410,7 @@ Parameters:
   delta, eps: tolerance
 '''
 def PW_FW_dim2(mu, nu, M, p, c,
-               step = "armijo", max_iter = 100, delta = 0.01, eps = 0.001):
+               max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
   # transportation plan, marginals and gradient initialization
   xk, x_marg, y_marg, mask1, mask2 = x_init_dim2(mu, nu, p, n)

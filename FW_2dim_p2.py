@@ -1,131 +1,5 @@
 import numpy as np
 
-class TriDiagonal2D:
-    OFFSETS = {
-        ( 0,  0): "dist0",
-
-        (-1,  0): "dist1_0",
-        ( 0, -1): "dist1_1",
-        ( 1,  0): "dist1_2",
-        ( 0,  1): "dist1_3",
-
-        (-1, -1): "dist2_0",
-        ( 1, -1): "dist2_1",
-        (-1,  1): "dist2_2",
-        ( 1,  1): "dist2_3",
-    }
-
-    def __init__(self, **blocks):
-        self.dist0   = blocks["dist0"]
-        self.dist1_0 = blocks["dist1_0"]
-        self.dist1_1 = blocks["dist1_1"]
-        self.dist1_2 = blocks["dist1_2"]
-        self.dist1_3 = blocks["dist1_3"]
-        self.dist2_0 = blocks["dist2_0"]
-        self.dist2_1 = blocks["dist2_1"]
-        self.dist2_2 = blocks["dist2_2"]
-        self.dist2_3 = blocks["dist2_3"]
-
-        self.n = self.dist0.shape[0]
-
-        self.blocks = {
-            (0, 0): self.dist0,
-            (-1, 0): self.dist1_0,
-            (0, -1): self.dist1_1,
-            (1, 0): self.dist1_2,
-            (0, 1): self.dist1_3,
-            (-1, -1): self.dist2_0,
-            (1, -1): self.dist2_1,
-            (-1, 1): self.dist2_2,
-            (1, 1): self.dist2_3,
-        }
-
-    def get(self, i, j, k, l):
-        di, dj = k - i, l - j
-        block = self.blocks.get((di, dj))
-        if block is None:
-            return 0.0
-        return block[i, j]
-
-    def set(self, i, j, k, l, val):
-        di, dj = k - i, l - j
-        block = self.blocks.get((di, dj))
-        if block is None:
-            raise ValueError("Outside stencil")
-        block[i, j] = val
-
-    def update(self, i, j, k, l, delta):
-        if delta == 0:
-            return
-        di, dj = k - i, l - j
-        block = self.blocks.get((di, dj))
-        if block is None:
-            raise ValueError("Outside stencil")
-        block[i, j] += delta
-
-    def sum(self):
-        return sum(b.sum() for b in self.blocks.values())
-
-    def has_positive(self):
-        return any(np.any(b > 0) for b in self.blocks.values())
-
-    def min(self):
-        return min(b.min() for b in self.blocks.values())
-
-    def argmin(self):
-        min_val = np.inf
-        min_pos = (-1, -1, -1, -1)
-
-        for (di, dj), block in self.blocks.items():
-            val = block.min()
-            if val < min_val:
-                idx = np.unravel_index(np.argmin(block), block.shape)
-                i, j = idx
-                min_val = val
-                min_pos = (i, j, i + di, j + dj)
-
-        return min_pos
-
-    def masked_argmax(self, mask, eps):
-        best_val = eps
-        best_pos = (-1, -1, -1, -1)
-
-        for (di, dj), block in self.blocks.items():
-            active = mask.blocks[(di, dj)] > 0
-            if not np.any(active):
-                continue
-
-            masked_vals = np.where(active, block, -np.inf)
-            val = masked_vals.max()
-            if val > best_val:
-                idx = np.unravel_index(np.argmax(masked_vals), block.shape)
-                i, j = idx
-                best_val = val
-                best_pos = (i, j, i + di, j + dj)
-
-        return best_val, best_pos
-
-    def dot(self, other):
-        return sum(np.sum(self.blocks[k] * other.blocks[k]) for k in self.blocks)
-
-    def round(self, decimals=0):
-        return TriDiagonal2D(**{
-            name: np.round(getattr(self, name), decimals)
-            for name in self.__dict__ if name.startswith("dist")
-        })
-
-    def to_dense(self):
-        n = self.n
-        A = np.zeros((n, n, n, n))
-        for (di, dj), block in self.blocks.items():
-            for i in range(n):
-                for j in range(n):
-                    k, l = i + di, j + dj
-                    if 0 <= k < n and 0 <= l < n:
-                        A[i, j, k, l] = block[i, j]
-        return A
-    
-
 '''
 Power-like entropy function
 Parameters:
@@ -194,6 +68,54 @@ def cost_dim2_p2(pi, x_marg, y_marg, mu, nu):
     return cost_transport + term_x + term_y
 
 
+"""
+Cost lookup using array indexing, valid for p = 2 and the specific 9-point stencil
+Parameters:
+  mat_ind: index from 0 to 8 corresponding to the relative position in the stencil
+"""
+cost_array = np.array([0, 1, 1, 1, 1, np.sqrt(2), np.sqrt(2), np.sqrt(2), np.sqrt(2)])
+
+def cost_ind_dim2_p2(mat_ind):
+    return cost_array[mat_ind]
+
+
+'''
+Function for converting (9,n,n) matrix representation into its dense form (n,n,n,n)
+Parameters:
+  pi: transportation plan in (9,n,n) format
+  n: number of sample points
+'''
+def to_dense_dim2_p2(pi, n):
+    A = np.zeros((n, n, n, n))
+    
+    # Create index grids
+    i_grid, j_grid = np.meshgrid(np.arange(n), np.arange(n), indexing='ij')
+    
+    offsets = [
+        (0, 0), (-1, 0), (0, -1), (1, 0), (0, 1),
+        (-1, -1), (1, -1), (-1, 1), (1, 1)
+    ]
+    
+    for idx, (di, dj) in enumerate(offsets):
+        # Compute target indices
+        k_grid = i_grid + di
+        l_grid = j_grid + dj
+        
+        # Create validity mask
+        valid = (k_grid >= 0) & (k_grid < n) & (l_grid >= 0) & (l_grid < n)
+        
+        # Extract valid indices
+        i_valid = i_grid[valid]
+        j_valid = j_grid[valid]
+        k_valid = k_grid[valid]
+        l_valid = l_grid[valid]
+        
+        # Assign values
+        A[i_valid, j_valid, k_valid, l_valid] = pi[idx, i_valid, j_valid]
+    
+    return A
+
+
 '''
 Initial transportation plan + marginals (only for p = 2)
 Parameters:
@@ -239,85 +161,149 @@ def grad_dim2_p2(x_marg, y_marg, mask1, mask2, n):
     # Initialize 9 * n^2 gradient vector
     grad = np.zeros((9, n, n))
 
-    # fill distance-0 neighbors
+    # grad[mat_idx, i, j] = cost + dx[i,j] + dy[k,l]
+    # where (k,l) = (i,j) + offset[mat_idx]
+
+    # Index 0
     m = mask1 & mask2
-    grad[0][m] = dy[m] + dx[m]
+    grad[0][m] = dx[m] + dy[m]  # cost = 0
 
-    # fill distance-1 neighbors
+    # Index 1: (i,j) → (i-1,j) [up]
+    # Source: (i,j) with i ∈ [1,n-1]
+    # Target: (i-1,j) = (k,j) with k ∈ [0,n-2]
     m = mask1[1:, :] & mask2[:-1, :]
-    grad[1][1:, :][m] = 1 + dy[1:, :][m] + dx[:-1, :][m]
+    grad[1][1:, :][m] = 1 + dx[1:, :][m] + dy[:-1, :][m]
 
+    # Index 2: (i,j) → (i,j-1) [left]
     m = mask1[:, 1:] & mask2[:, :-1]
-    grad[2][:, 1:][m] = 1 + dy[:, 1:][m] + dx[:, :-1][m]
+    grad[2][:, 1:][m] = 1 + dx[:, 1:][m] + dy[:, :-1][m]
 
+    # Index 3: (i,j) → (i+1,j) [down]
     m = mask1[:-1, :] & mask2[1:, :]
-    grad[3][:-1, :][m] = 1 + dy[:-1, :][m] + dx[1:, :][m]
+    grad[3][:-1, :][m] = 1 + dx[:-1, :][m] + dy[1:, :][m]
 
+    # Index 4: (i,j) → (i,j+1) [right]
     m = mask1[:, :-1] & mask2[:, 1:]
-    grad[4][:, :-1][m] = 1 + dy[:, :-1][m] + dx[:, 1:][m]
+    grad[4][:, :-1][m] = 1 + dx[:, :-1][m] + dy[:, 1:][m]
 
-    # fill distance-2 diagonals
+    # Diagonal directions
     sqrt2 = np.sqrt(2)
+    
+    # Index 5: (i,j) → (i-1,j-1) [up-left]
     m = mask1[1:, 1:] & mask2[:-1, :-1]
-    grad[5][1:, 1:][m] = sqrt2 + dy[1:, 1:][m] + dx[:-1, :-1][m]
+    grad[5][1:, 1:][m] = sqrt2 + dx[1:, 1:][m] + dy[:-1, :-1][m]
 
+    # Index 6: (i,j) → (i+1,j-1) [down-left]
     m = mask1[:-1, 1:] & mask2[1:, :-1]
-    grad[6][:-1, 1:][m] = sqrt2 + dy[:-1, 1:][m] + dx[1:, :-1][m]
+    grad[6][:-1, 1:][m] = sqrt2 + dx[:-1, 1:][m] + dy[1:, :-1][m]
 
+    # Index 7: (i,j) → (i-1,j+1) [up-right]
     m = mask1[1:, :-1] & mask2[:-1, 1:]
-    grad[7][1:, :-1][m] = sqrt2 + dy[1:, :-1][m] + dx[:-1, 1:][m]
+    grad[7][1:, :-1][m] = sqrt2 + dx[1:, :-1][m] + dy[:-1, 1:][m]
 
+    # Index 8: (i,j) → (i+1,j+1) [down-right]
     m = mask1[:-1, :-1] & mask2[1:, 1:]
-    grad[8][:-1, :-1][m] = sqrt2 + dy[:-1, :-1][m] + dx[1:, 1:][m]
+    grad[8][:-1, :-1][m] = sqrt2 + dx[:-1, :-1][m] + dy[1:, 1:][m]
 
     return grad
 
 
 '''
-Function to find the search direction
+Linear Minimization Oracle for compact (9, n, n) representation.
 Parameters:
   pi: transportation plan
   grad: gradient of UOT
   M: upper bound for generalized simplex
   eps: tolerance
+Returns:
+  i_FW: Tuple ((mat_idx, i, j), (i, j, k, l)) or ((-1,-1,-1), (-1,-1,-1,-1))
+  i_AFW: Tuple ((mat_idx, i, j), (i, j, k, l)) or ((-1,-1,-1), (-1,-1,-1,-1))
 '''
-def direction_p2(pi, grad, M, eps = 0.001):
-  # Frank-Wolfe direction
-  min_val = grad.min()
-  if min_val < -eps:
-    i_FW = grad.argmin()
-  else:
-    i_FW = (-1, -1, -1, -1)
+# Offset mapping for converting mat_idx to (di, dj)
+offsets_dim2_p2 = [
+    (0, 0),    # 0: same position
+    (-1, 0),   # 1: up
+    (0, -1),   # 2: left
+    (1, 0),    # 3: down
+    (0, 1),    # 4: right
+    (-1, -1),  # 5: up-left
+    (1, -1),   # 6: down-left
+    (-1, 1),   # 7: up-right
+    (1, 1),    # 8: down-right
+]
+offset_to_idx_dim2_p2 = {offset: idx for idx, offset in enumerate(offsets_dim2_p2)}
 
-  # Away Frank-Wolfe direction
-  if not pi.has_positive():
-    return i_FW, (-1, -1, -1, -1)
-
-  max_val, i_AFW = grad.masked_argmax(pi, eps = 0.001)
-  if (max_val <= eps):
-    if (pi.sum() < M):
-      return i_FW, (-1, -1, -1, -1)
+def LMO_dim2_p2(pi, grad, M, eps=0.001):
+    
+    n = pi.shape[1]
+    
+    def compact_to_full(matrix_idx, i, j):
+        """Convert compact (mat_idx, i, j) to full (i, j, k, l)."""
+        if matrix_idx == -1:
+            return (-1, -1, -1, -1)
+        di, dj = offsets_dim2_p2[matrix_idx]
+        k = i + di
+        l = j + dj
+        return (i, j, k, l)
+    
+    # Frank-Wolfe direction (minimize gradient)
+    flat_idx = np.argmin(grad)
+    min_val = grad.flat[flat_idx]
+    
+    if min_val < -eps:
+        # Manual unraveling
+        matrix_idx = flat_idx // (n * n)
+        position = flat_idx % (n * n)
+        i = position // n
+        j = position % n
+        compact_FW = (matrix_idx, i, j)
+        full_FW = compact_to_full(matrix_idx, i, j)
+        i_FW = (compact_FW, full_FW)
     else:
-      print("M: ", M, ", pi.sum(): ", pi.sum(), ". Increase M!")
+        i_FW = ((-1, -1, -1), (-1, -1, -1, -1))
 
-  return i_FW, i_AFW
+    # Away Frank-Wolfe direction (maximize gradient among active set)
+    mask = (pi > 0)
+
+    if not np.any(mask):
+        return i_FW, ((-1, -1, -1), (-1, -1, -1, -1))
+    
+    grad_masked = np.where(mask, grad, -np.inf)
+    max_val = grad_masked.max()
+    
+    if max_val <= eps:
+        if pi.sum() < M:
+            return i_FW, ((-1, -1, -1), (-1, -1, -1, -1))
+        else:
+            print(f"Warning: M={M}, pi.sum()={pi.sum():.2f}. Increase M!")
+            return i_FW, ((-1, -1, -1), (-1, -1, -1, -1))
+
+    flat_idx = np.argmax(grad_masked)
+    
+    # Manual unraveling
+    matrix_idx = flat_idx // (n * n)
+    position = flat_idx % (n * n)
+    i = position // n
+    j = position % n
+    compact_AFW = (matrix_idx, i, j)
+    full_AFW = compact_to_full(matrix_idx, i, j)
+    i_AFW = (compact_AFW, full_AFW)
+    
+    return i_FW, i_AFW
 
 
 '''
 Parameters:
-  xk: transportation plan
   grad: gradient of UOT
-  dir: indices of the search direction
+  compact_FW: indices of the FW direction
   M: upper bound for generalized simplex
+  sum_term: sum of the transportation plan (for Frank-Wolfe gap calculation)
 '''
-def gap_calc_p2(xk, grad, dir, M):
-  i_FW, _ = dir
-  inner = grad.dot(xk)
-
-  if i_FW[0] != -1:
-    gap = - M * grad.get(*i_FW) + inner
+def gap_calc_dim2_p2(grad, compact_FW, M, sum_term):
+  if compact_FW[0] != -1:
+    gap = - M * grad[compact_FW] + sum_term
   else:
-    gap = inner
+    gap = sum_term
 
   return gap
 
@@ -327,139 +313,218 @@ Optimal stepsize (p = 2)
 Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
   mu, nu: measures
-  i: indices of the selected FW and AFW vertices
+  mat_idx: matrix index of the FW and AFW vertices
+  full: indices of the FW and AFW vertices in full (i, j, k, l) format
 '''
-def opt_step(x_marg, y_marg, mu, nu, i):
-  (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = i
+def opt_step_dim2_p2(x_marg, y_marg, mu, nu, mat_idx, full):
+  ind_FW, ind_AFW = mat_idx
+  (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = full
+  
   if x1FW == -1:
-    return (cost(x1AFW, x2AFW, y1AFW, y2AFW) + y_marg[y1AFW, y2AFW] +
+    return (cost_ind_dim2_p2(ind_AFW) + y_marg[y1AFW, y2AFW] +
             x_marg[x1AFW, x2AFW] - 2) / (1/mu[x1AFW, x2AFW] + 1/nu[y1AFW, y2AFW])
   elif x1AFW == -1:
-    return (2 - cost(x1FW, x2FW, y1FW, y2FW) - y_marg[y1FW, y2FW] -
+    return (2 - cost_ind_dim2_p2(ind_FW) - y_marg[y1FW, y2FW] -
             x_marg[x1FW, x2FW]) / (1/mu[x1FW, x2FW] + 1/nu[y1FW, y2FW])
-  elif i[0][:2] == i[1][:2]:
-    return (cost(x1FW, x2FW, y1AFW, y2AFW) - cost(x1FW, x2FW, y1FW, y2FW) + y_marg[y1AFW, y2AFW] -
+  elif x1FW == x1AFW and x2FW == x2AFW:
+    return (cost_ind_dim2_p2(ind_AFW) - cost_ind_dim2_p2(ind_FW) + y_marg[y1AFW, y2AFW] -
             y_marg[y1FW, y2FW]) / (1/nu[y1AFW, y2AFW] + 1/nu[y1FW, y2FW])
-  elif i[0][2:] == i[1][2:]:
-    return (cost(x1AFW, x2AFW, y1FW, y2FW) - cost(x1FW, x2FW, y1FW, y2FW) + x_marg[x1AFW, x2AFW] -
+  elif y1FW == y1AFW and y2FW == y2AFW:
+    return (cost_ind_dim2_p2(ind_AFW) - cost_ind_dim2_p2(ind_FW) + x_marg[x1AFW, x2AFW] -
             x_marg[x1FW, x2FW]) / (1/mu[x1AFW, x2AFW] + 1/mu[x1FW, x2FW])
   else:
-    return (cost(x1AFW, x2AFW, y1AFW, y2AFW) - cost(x1FW, x2FW, y1FW, y2FW) +
+    return (cost_ind_dim2_p2(ind_AFW) - cost_ind_dim2_p2(ind_FW) +
             y_marg[y1AFW, y2AFW] - y_marg[y1FW, y2FW] + x_marg[x1AFW, x2AFW] -
             x_marg[x1FW, x2FW]) / (1/mu[x1AFW, x2AFW] + 1/mu[x1FW, x2FW] + 1/nu[y1AFW, y2AFW] + 1/nu[y1FW, y2FW])
 
 
 '''
-Armijo stepsize
+Gradient update: only compute derivatives for affected positions
 Parameters:
-  x_marg, y_marg: X and Y marginals of the transportation plan
-  grad: gradient of UOT
-  mu, nu: measures
-  v: indices of the selected FW and AFW vertices
-  p: main parameter that defines the p-entropy
-  theta, beta, gamma: parameters for the Armijo stepsize
+    x_marg: X marginals (n, n)
+    y_marg: Y marginals (n, n)
+    grad: Gradient in compact form (9, n, n)
+    mask1: Source mask (n, n)
+    mask2: Target mask (n, n)
+    FW_full: (x1FW, x2FW, y1FW, y2FW) or (-1, -1, -1, -1)
+    AFW_full: (x1AFW, x2AFW, y1AFW, y2AFW) or (-1, -1, -1, -1)
 '''
-def armijo_p2(x_marg, y_marg, grad, mu, nu, v, p, theta = 1, beta = 0.4, gamma = 0.5):
-  # get the indices of the selected FW and AFW vertices
-  FW, AFW = v
-
-  if FW[0] != -1:
-    inner = grad.get(*FW)
-    if AFW[0] != -1:
-      inner -= grad.get(*AFW)
-      diff = (theta * (cost(*FW) - cost(*AFW)) + (Up(x_marg[FW[0],FW[1]] + theta/mu[FW[0],FW[1]], p) - Up(x_marg[FW[0],FW[1]], p))*mu[FW[0],FW[1]] +
-              (Up(y_marg[FW[2],FW[3]] + theta/nu[FW[2],FW[3]], p) - Up(y_marg[FW[2],FW[3]], p))*nu[FW[2],FW[3]] +
-               (Up(x_marg[AFW[0],AFW[1]] - theta/mu[AFW[0],AFW[1]], p) - Up(x_marg[AFW[0],AFW[1]], p))*mu[AFW[0],AFW[1]]
-              + (Up(y_marg[AFW[2],AFW[3]] - theta/nu[AFW[2],AFW[3]], p) - Up(y_marg[AFW[2],AFW[3]], p))*nu[AFW[2],AFW[3]])
-      while diff > beta*theta*inner:
-        theta = gamma * theta
-        diff = (theta * (cost(*FW) - cost(*AFW)) + (Up(x_marg[FW[0],FW[1]] + theta/mu[FW[0],FW[1]], p) - Up(x_marg[FW[0],FW[1]], p))*mu[FW[0],FW[1]] +
-                (Up(y_marg[FW[2],FW[3]] + theta/nu[FW[2],FW[3]], p) - Up(y_marg[FW[2],FW[3]], p))*nu[FW[2],FW[3]] +
-                 (Up(x_marg[AFW[0],AFW[1]] - theta/mu[AFW[0],AFW[1]], p) - Up(x_marg[AFW[0],AFW[1]], p))*mu[AFW[0],AFW[1]]
-                + (Up(y_marg[AFW[2],AFW[3]] - theta/nu[AFW[2],AFW[3]], p) - Up(y_marg[AFW[2],AFW[3]], p))*nu[AFW[2],AFW[3]])
-    else:
-      diff = (theta*cost(*FW) + (Up(x_marg[FW[0],FW[1]] + theta/mu[FW[0],FW[1]], p) - Up(x_marg[FW[0],FW[1]], p))*mu[FW[0],FW[1]] +
-              (Up(y_marg[FW[2],FW[3]] + theta/nu[FW[2],FW[3]], p) - Up(y_marg[FW[2],FW[3]], p))*nu[FW[2],FW[3]])
-      while diff > beta*theta*inner:
-        theta = gamma * theta
-        diff = (theta*cost(*FW) + (Up(x_marg[FW[0],FW[1]] + theta/mu[FW[0],FW[1]], p) - Up(x_marg[FW[0],FW[1]], p))*mu[FW[0],FW[1]] +
-                (Up(y_marg[FW[2],FW[3]] + theta/nu[FW[2],FW[3]], p) - Up(y_marg[FW[2],FW[3]], p))*nu[FW[2],FW[3]])
-
-  elif AFW[0] != -1:
-      inner = -grad.get(*AFW)
-      diff = (- theta * cost(*AFW) + (Up(x_marg[AFW[0],AFW[1]] - theta/mu[AFW[0],AFW[1]], p) - Up(x_marg[AFW[0],AFW[1]], p))*mu[AFW[0],AFW[1]]
-              + (Up(y_marg[AFW[2],AFW[3]] - theta/nu[AFW[2],AFW[3]], p) - Up(y_marg[AFW[2],AFW[3]], p))*nu[AFW[2],AFW[3]])
-      while diff > beta*theta*inner:
-        theta = gamma * theta
-        diff = (- theta * cost(*AFW) + (Up(x_marg[AFW[0],AFW[1]] - theta/mu[AFW[0],AFW[1]], p) - Up(x_marg[AFW[0],AFW[1]], p))*mu[AFW[0],AFW[1]]
-                + (Up(y_marg[AFW[2],AFW[3]] - theta/nu[AFW[2],AFW[3]], p) - Up(y_marg[AFW[2],AFW[3]], p))*nu[AFW[2],AFW[3]])
-
-  return theta
+def grad_update_dim2_p2(x_marg, y_marg, grad, mask1, mask2, FW_full, AFW_full):
+    n = grad.shape[1]
+    
+    def update_source_neighborhood(x1, x2, y1, y2):
+        """Update entries with source near (x1,x2), target at (y1,y2)."""
+        if not mask2[y1, y2]:
+            return
+        
+        # Compute derivative only once for target
+        dy_val = dUp_dx(y_marg[y1, y2], 2)
+        
+        # Iterate over 3×3 neighborhood of source
+        for di in [-1, 0, 1]:
+            for dj in [-1, 0, 1]:
+                i, j = x1 + di, x2 + dj
+                
+                if not (0 <= i < n and 0 <= j < n and mask1[i, j]):
+                    continue
+                
+                offset = (y1 - i, y2 - j)
+                if offset in offset_to_idx_dim2_p2:
+                    mat_idx = offset_to_idx_dim2_p2[offset]
+                    # Compute derivative only for this specific (i, j)
+                    dx_val = dUp_dx(x_marg[i, j], 2)
+                    grad[mat_idx, i, j] = cost_ind_dim2_p2(mat_idx) + dx_val + dy_val
+    
+    def update_target_neighborhood(x1, x2, y1, y2):
+        """Update entries with source at (x1,x2), target near (y1,y2)."""
+        if not mask1[x1, x2]:
+            return
+        
+        # Compute derivative only once for source
+        dx_val = dUp_dx(x_marg[x1, x2], 2)
+        
+        # Iterate over 3×3 neighborhood of target
+        for di in [-1, 0, 1]:
+            for dj in [-1, 0, 1]:
+                k, l = y1 + di, y2 + dj
+                
+                if not (0 <= k < n and 0 <= l < n and mask2[k, l]):
+                    continue
+                
+                offset = (k - x1, l - x2)
+                if offset in offset_to_idx_dim2_p2:
+                    mat_idx = offset_to_idx_dim2_p2[offset]
+                    # Compute derivative only for this specific (k, l)
+                    dy_val = dUp_dx(y_marg[k, l], 2)
+                    grad[mat_idx, x1, x2] = cost_ind_dim2_p2(mat_idx) + dx_val + dy_val
+    
+    # Update FW direction
+    if FW_full[0] != -1:
+        x1, x2, y1, y2 = FW_full
+        update_source_neighborhood(x1, x2, y1, y2)
+        update_target_neighborhood(x1, x2, y1, y2)
+    
+    # Update AFW direction
+    if AFW_full[0] != -1:
+        x1, x2, y1, y2 = AFW_full
+        update_source_neighborhood(x1, x2, y1, y2)
+        update_target_neighborhood(x1, x2, y1, y2)
+    
+    return grad
 
 
 '''
-Stepsize calculation
+Function to update the sum_term used in the gap calculation
 Parameters:
-  x_marg, y_marg: X and Y marginals of the transportation plan
-  grad: gradient of UOT
-  mu, nu: measures
-  v: indices of the selected FW and AFW vertices
-  p: main parameter
-  theta, beta, gamma: Armijo parameters
+    sum_term: current value of the sum term
+    grad: gradient in compact form (9, n, n)
+    x: transportation plan in compact form (9, n, n)
+    FW_full, AFW_full: full indices (x1, x2, y1, y2) or (-1, -1, -1, -1)
+    n: number of sample points
+    sign: +1, -1
 '''
-def step_calc_p2(x_marg, y_marg, grad, mu, nu, v, p, step = "optimal", theta = 1, beta = 0.4, gamma = 0.5):
-  if step == "armijo":
-    return armijo_p2(x_marg, y_marg, grad, mu, nu, v, p, theta = theta, beta = beta, gamma = gamma)
-  elif step == "optimal":
-    return min(opt_step(x_marg, y_marg, mu, nu, v), theta)
-  else:
-    raise ValueError("Stepsize not recognized! Use 'armijo' or 'optimal'.")
-
+def update_sum_term_dim2_p2(sum_term, grad, x, FW_full, AFW_full, n, sign):
+    n = grad.shape[1]
+    
+    # Use a set to track processed entries (avoid double-counting)
+    processed = set()
+    
+    def process_position(x1, x2, y1, y2):
+        nonlocal sum_term
+        
+        if x1 == -1:
+            return
+        
+        # Source neighborhood
+        for di in [-1, 0, 1]:
+            for dj in [-1, 0, 1]:
+                i, j = x1 + di, x2 + dj
+                if not (0 <= i < n and 0 <= j < n):
+                    continue
+                
+                offset = (y1 - i, y2 - j)
+                if offset in offset_to_idx_dim2_p2:
+                    mat_idx = offset_to_idx_dim2_p2[offset]
+                    entry = (mat_idx, i, j)
+                    if entry not in processed:
+                        sum_term += sign * grad[mat_idx, i, j] * x[mat_idx, i, j]
+                        processed.add(entry)
+        
+        # Target neighborhood
+        for di in [-1, 0, 1]:
+            for dj in [-1, 0, 1]:
+                k, l = y1 + di, y2 + dj
+                if not (0 <= k < n and 0 <= l < n):
+                    continue
+                
+                offset = (k - x1, l - x2)
+                if offset in offset_to_idx_dim2_p2:
+                    mat_idx = offset_to_idx_dim2_p2[offset]
+                    entry = (mat_idx, x1, x2)
+                    if entry not in processed:
+                        sum_term += sign * grad[mat_idx, x1, x2] * x[mat_idx, x1, x2]
+                        processed.add(entry)
+    
+    # Process FW and AFW
+    if FW_full[0] != -1:
+        process_position(*FW_full)
+    if AFW_full[0] != -1:
+        process_position(*AFW_full)
+    
+    return sum_term
 
 
 """
-Update the gradient stored in a Tridiagonal2D object using only the non-zero entries.
+Apply step update for either AFW (Away Frank-Wolfe) or FW (Frank-Wolfe) direction
 Parameters:
-  x_marg, y_marg  : X and Y marginals of the transportation plan
-  grad            : gradient of UOT
-  mask1, mask2    : masks for the zero coordinates
-  v               : ((x1FW,x2FW,y1FW,y2FW), (x1AFW,x2AFW,y1AFW,y2AFW))
-  """
-def grad_update_p2(x_marg, y_marg, grad, mask1, mask2, v):
-    n = grad.n
-    (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = v
+    xk: Transportation plan (9, n, n)
+    x_marg, y_marg: Marginals (n, n)
+    mu, nu: Measures (n, n)
+    M: Upper bound
+    FW_compact: (mat_FW, i_FW, j_FW)
+    FW_full: (x1FW, x2FW, y1FW, y2FW)
+    AFW_compact: (mat_AFW, i_AFW, j_AFW)
+    AFW_full: (x1AFW, x2AFW, y1AFW, y2AFW)
 
-    # Helper: update 3x3 neighborhood around x (i0,j0)
-    def update_x(i0, j0):
-        for di in [-1, 0, 1]:
-            for dj in [-1, 0, 1]:
-                k = i0 + di
-                l = j0 + dj
-                if (0 <= k < n) and (0 <= l < n) and mask2[k,l]:
-                    val = cost(i0, j0, k, l) + dUp_dx(x_marg[i0,j0], 2) + dUp_dx(y_marg[k,l], 2)
-                    grad.set(i0, j0, k, l, val)
+Returns:
+    Updated xk, x_marg, y_marg
+"""
+def apply_step_dim2_p2(xk, x_marg, y_marg, mu, nu, M, 
+                       FW_compact, FW_full, AFW_compact, AFW_full):
 
-    # Helper: update 3x3 neighborhood around y (k0,l0)
-    def update_y(k0, l0):
-        for di in [-1, 0, 1]:
-            for dj in [-1, 0, 1]:
-                i = k0 + di
-                j = l0 + dj
-                if (0 <= i < n) and (0 <= j < n) and mask1[i,j]:
-                    val = cost(i, j, k0, l0) + dUp_dx(x_marg[i,j], 2) + dUp_dx(y_marg[k0,l0], 2)
-                    grad.set(i, j, k0, l0, val)
-
-    # Update FW direction
-    if x1FW != -1:
-        update_x(x1FW, x2FW)
-        update_y(y1FW, y2FW)
-
-    # Update AFW direction
+    mat_FW, i_FW, j_FW = FW_compact
+    mat_AFW, i_AFW, j_AFW = AFW_compact
+    x1FW, x2FW, y1FW, y2FW = FW_full
+    x1AFW, x2AFW, y1AFW, y2AFW = AFW_full
+    
+    # Compute optimal step size
+    gammak_opt = opt_step_dim2_p2(x_marg, y_marg, mu, nu, 
+                                  mat_idx = (mat_FW, mat_AFW), full = (FW_full, AFW_full))
+    
     if x1AFW != -1:
-        update_x(x1AFW, x2AFW)
-        update_y(y1AFW, y2AFW)
-
-    return grad
+        # AFW exists
+        gamma0 = xk[mat_AFW, i_AFW, j_AFW] - 1e-10
+        gammak = min(gammak_opt, gamma0)
+        
+        xk[mat_AFW, i_AFW, j_AFW] -= gammak
+        x_marg[x1AFW, x2AFW] -= gammak / mu[x1AFW, x2AFW]
+        y_marg[y1AFW, y2AFW] -= gammak / nu[y1AFW, y2AFW]
+        
+        if x1FW != -1:
+            xk[mat_FW, i_FW, j_FW] += gammak
+            x_marg[x1FW, x2FW] += gammak / mu[x1FW, x2FW]
+            y_marg[y1FW, y2FW] += gammak / nu[y1FW, y2FW]
+    
+    else:
+        # Only FW
+        gamma0 = M - np.sum(xk) + xk[mat_FW, i_FW, j_FW] - 1e-10
+        gammak = min(gammak_opt, gamma0)
+        
+        xk[mat_FW, i_FW, j_FW] += gammak
+        x_marg[x1FW, x2FW] += gammak / mu[x1FW, x2FW]
+        y_marg[y1FW, y2FW] += gammak / nu[y1FW, y2FW]
+    
+    return xk, x_marg, y_marg
 
 
 '''
@@ -471,50 +536,40 @@ Parameters:
   max_iter: max iterations
   delta, eps: tolerance
 '''
-def PW_FW_dim2_p2(mu, nu, M, step = "optimal",
+def PW_FW_dim2_p2(mu, nu, M,
                   max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
+
   # transportation plan, marginals and gradient initialization
-  xk, x_marg, y_marg, mask1, mask2 = x_init_p2(mu, nu)
-  grad_xk = grad_init_p2(x_marg, y_marg, mask1, mask2, n)
+  xk, x_marg, y_marg, mask1, mask2 = x_init_dim2_p2(mu, nu, n)
+  grad_xk = grad_dim2_p2(x_marg, y_marg, mask1, mask2, n)
+
+  # Initialize sum_term for efficient gap calculation
+  sum_term = np.sum(grad_xk * xk)
 
   for k in range(max_iter):
-
-    # search direction vertices
-    vk = direction_p2(xk, grad_xk, M, eps)
+    # search direction (returns both (9,n,n) and (n,n,n,n) vector indices)
+    (comp_FW, full_FW), (comp_AFW, full_AFW) = LMO_dim2_p2(xk, grad_xk, M, eps)
 
     # gap calculation
-    gap = gap_calc_p2(xk, grad_xk, vk, M)
+    gap = gap_calc_dim2_p2(grad_xk, comp_FW, M, sum_term)
 
-    if (gap <= delta) or (vk == ((-1,-1,-1,-1),(-1,-1,-1,-1))): 
+    if (gap <= delta) or (full_FW == (-1,-1,-1,-1) and full_AFW == (-1,-1,-1,-1)): 
       print("Converged after: ", k, " iterations ")
       return (xk, grad_xk, x_marg, y_marg)
 
-    # coordinates + rows and columns update
-    (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = vk
-    if x1AFW != -1:
-
-      gammak = step_calc_p2(x_marg, y_marg, grad_xk, mu, nu, vk, p = 2, step = step, theta = xk.get(x1AFW, x2AFW, y1AFW, y2AFW))
-
-      xk.update(x1AFW, x2AFW, y1AFW, y2AFW, -gammak)
-      x_marg[x1AFW, x2AFW] -= gammak / mu[x1AFW, x2AFW]
-      y_marg[y1AFW, y2AFW] -= gammak / nu[y1AFW, y2AFW]
-      if x1FW != -1:
-
-        xk.update(x1FW, x2FW, y1FW, y2FW, gammak)
-        x_marg[x1FW, x2FW] += gammak / mu[x1FW, x2FW]
-        y_marg[y1FW, y2FW] += gammak / nu[y1FW, y2FW]
-    else:
-      # stepsize
-      gammak = step_calc_p2(x_marg, y_marg, grad_xk, mu, nu, vk,
-                         p = 2, step = step, theta = M - xk.sum() + xk.get(x1FW, x2FW, y1FW, y2FW))
-
-      xk.update(x1FW, x2FW, y1FW, y2FW, gammak)
-      x_marg[x1FW, x2FW] += gammak / mu[x1FW, x2FW]
-      y_marg[y1FW, y2FW] += gammak / nu[y1FW, y2FW]
+    # Remove contributions from affected coordinates before gradient update
+    sum_term = update_sum_term_dim2_p2(sum_term, grad_xk, xk, full_FW, full_AFW, n, sign=-1)
+    
+    # Apply step update
+    xk, x_marg, y_marg = apply_step_dim2_p2(xk, x_marg, y_marg, mu, nu, M, 
+                                            comp_FW, full_FW, comp_AFW, full_AFW)
 
     # gradient update
-    grad_xk = grad_update_p2(x_marg, y_marg, grad_xk, mask1, mask2, vk)
+    grad_xk = grad_update_dim2_p2(x_marg, y_marg, grad_xk, mask1, mask2, full_FW, full_AFW)
+    
+    # Add back contributions from affected coordinates after gradient update
+    sum_term = update_sum_term_dim2_p2(sum_term, grad_xk, xk, full_FW, full_AFW, n, sign=1)
 
   print("Converged after: ", max_iter, " iterations ")
   return (xk, grad_xk, x_marg, y_marg)

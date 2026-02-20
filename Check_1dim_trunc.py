@@ -4,7 +4,7 @@ Experiment: 1D Truncated Frank-Wolfe (vector implementation)
 
 import numpy as np
 import time
-import FW_truncated as fw
+import FW_1dim_trunc as fw
 
 
 # Parameters
@@ -138,12 +138,12 @@ print(f"\n{'='*80}")
 print(f"Truncated Frank-Wolfe completed in {elapsed_time:.4f} seconds")
 print(f"{'='*80}\n")
 
-# Compute and print final costs
-cost = fw.UOT_cost(xk, x_marg, y_marg, c, mu, nu, p)
-print(f"Final UOT cost: {cost:.6f}")
-
 cost_trunc = fw.truncated_cost(xk, x_marg, y_marg, c, mu, nu, p, s_i, s_j, R)
 print(f"Final UOT cost (truncated): {cost_trunc:.6f}")
+
+# Compute and print final costs
+cost = fw.UOT_cost_upper(cost_trunc, n, s_i, R)
+print(f"Final UOT cost: {cost:.6f}")
 
 # Print additional information
 print("\nTransportation plan (matrix):")

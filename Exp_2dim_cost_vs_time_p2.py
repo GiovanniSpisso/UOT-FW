@@ -2,11 +2,17 @@ import time
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from FW_2dim import x_init_dim2 as x_init, grad_dim2 as grad_init, \
-  LMO_dim2 as direction, gap_calc_dim2 as gap_calc, step_calc_dim2 as step_calc, \
-  grad_update_dim2 as grad_update, UOT_cost_dim2 as UOT_cost
-from FW_2dim_p2 import x_init_p2, grad_init_p2, direction_p2, gap_calc_p2, \
-    step_calc_p2, grad_update_p2
+from FW_2dim_p2 import (
+    x_init_dim2_p2,
+    grad_dim2_p2,
+    LMO_dim2_p2,
+    gap_calc_dim2_p2,
+    opt_step_dim2_p2,
+    grad_update_dim2_p2,
+    apply_step_dim2_p2,
+    update_sum_term_dim2_p2,
+    cost_dim2_p2,
+)
 
 # Set seed for replicability
 np.random.seed(1)
@@ -26,8 +32,8 @@ eps = 0.001                                               # tolerance for calcul
 ###########################################################
 ###################     VANILLA FW     ####################
 ###########################################################
-print("\nComputing Cost VS Time for Vanilla FW")
-n = len(mu)
+#print("\nComputing Cost VS Time for Vanilla FW")
+#n = len(mu)
 
 # initial transportation plan, marginals and gradient initialization
 #cost_list = []
@@ -134,53 +140,48 @@ time_list = []
 start_time = time.time()
 no_time = 0
 
-xk, x_marg, y_marg, mask1, mask2 = x_init_p2(mu, nu)
-grad_xk = grad_init_p2(x_marg, y_marg, mask1, mask2, n)
+xk, x_marg, y_marg, mask1, mask2 = x_init_dim2_p2(mu, nu, n)
+grad_xk = grad_dim2_p2(x_marg, y_marg, mask1, mask2, n)
 
+# Initialize sum_term for efficient gap calculation
+sum_term = np.sum(grad_xk * xk)
 
+k = 0
 for k in range(max_iter):
-    #if k % 200 == 0:
-      #tot_time = time.time()
-      #time_list.append(tot_time - no_time - start_time)
-      #cost_list.append(UOT_cost(xk.to_dense(), x_marg, y_marg, mu, nu, p))
-      #no_time += time.time() - tot_time
+    if k % 100 == 0:
+        tot_time = time.time()
+        time_list.append(tot_time - no_time - start_time)
+        cost_list.append(cost_dim2_p2(xk, x_marg, y_marg, mu, nu))
+        no_time += time.time() - tot_time
 
-    # search direction vertices
-    vk = direction_p2(xk, grad_xk, M, eps)
+    # search direction vertices (compact and full format)
+    (compact_FW, full_FW), (compact_AFW, full_AFW) = LMO_dim2_p2(xk, grad_xk, M, eps)
 
     # gap calculation
-    gap = gap_calc_p2(xk, grad_xk, vk, M)
+    gap = gap_calc_dim2_p2(grad_xk, compact_FW, M, sum_term)
 
-    if (gap <= delta) or (vk == ((-1,-1,-1,-1),(-1,-1,-1,-1))): 
+    if (gap <= delta) or (full_FW == (-1,-1,-1,-1) and full_AFW == (-1,-1,-1,-1)): 
       print("Converged after: ", k, " iterations ")
+      break
 
-    # coordinates + rows and columns update
-    (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = vk
-    if x1AFW != -1:
+    # Remove contributions before gradient update
+    sum_term = update_sum_term_dim2_p2(sum_term, grad_xk, xk, full_FW, full_AFW, n, sign=-1)
 
-      gammak = step_calc_p2(x_marg, y_marg, grad_xk, mu, nu, vk, p = 2, 
-                            step = "optimal", theta = xk.get(x1AFW, x2AFW, y1AFW, y2AFW))
-
-      xk.update(x1AFW, x2AFW, y1AFW, y2AFW, -gammak)
-      x_marg[x1AFW, x2AFW] -= gammak / mu[x1AFW, x2AFW]
-      y_marg[y1AFW, y2AFW] -= gammak / nu[y1AFW, y2AFW]
-      if x1FW != -1:
-
-        xk.update(x1FW, x2FW, y1FW, y2FW, gammak)
-        x_marg[x1FW, x2FW] += gammak / mu[x1FW, x2FW]
-        y_marg[y1FW, y2FW] += gammak / nu[y1FW, y2FW]
-    else:
-      # stepsize
-      gammak = step_calc_p2(x_marg, y_marg, grad_xk, mu, nu, vk,
-                         p = 2, step = "optimal", theta = M - xk.sum() + xk.get(x1FW, x2FW, y1FW, y2FW))
-
-      xk.update(x1FW, x2FW, y1FW, y2FW, gammak)
-      x_marg[x1FW, x2FW] += gammak / mu[x1FW, x2FW]
-      y_marg[y1FW, y2FW] += gammak / nu[y1FW, y2FW]
+    # Apply step update
+    xk, x_marg, y_marg = apply_step_dim2_p2(xk, x_marg, y_marg, mu, nu, M,
+                                            compact_FW, full_FW, compact_AFW, full_AFW)
 
     # gradient update
-    grad_xk = grad_update_p2(x_marg, y_marg, grad_xk, mask1, mask2, vk)
+    grad_xk = grad_update_dim2_p2(x_marg, y_marg, grad_xk, mask1, mask2, full_FW, full_AFW)
 
+    # Add back contributions after gradient update
+    sum_term = update_sum_term_dim2_p2(sum_term, grad_xk, xk, full_FW, full_AFW, n, sign=1)
+
+# Record final cost if not already recorded
+if k % 100 != 0:
+    tot_time = time.time()
+    time_list.append(tot_time - no_time - start_time)
+    cost_list.append(cost_dim2_p2(xk, x_marg, y_marg, mu, nu))
 
 cost_FW_p2 = np.array(cost_list)
 time_FW_p2 = np.array(time_list)

@@ -6,7 +6,7 @@ from FW_1dim import x_init, grad, LMO, gap_calc, step_calc, \
     update_grad, UOT_cost, apply_step, update_sum_term
 from FW_1dim_p2 import x_init_p2, grad_p2, LMO_p2, gap_calc_p2, \
   update_grad_p2, opt_step, apply_step_p2, update_sum_term_p2, cost_p2, vec_i_to_mat_i_p2
-from FW_truncated import PW_FW_dim1_trunc, truncated_cost
+from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost
 
 # Set seed for replicability
 np.random.seed(0)
@@ -44,12 +44,13 @@ grad_xk = grad(x_marg, y_marg, mask1, mask2, p, c)
 
 # Initialize sum_term for efficient gap calculation
 sum_term = np.sum(grad_xk * xk)
-
+k = 0
 for k in range(max_iter):
-    tot_time = time.time()
-    time_list.append(tot_time - no_time - start_time)
-    cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
-    no_time += time.time() - tot_time
+    if k % 100 == 0:
+        tot_time = time.time()
+        time_list.append(tot_time - no_time - start_time)
+        cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
+        no_time += time.time() - tot_time
 
     # search direction
     vk = LMO(xk, grad_xk, M, eps)
@@ -79,6 +80,12 @@ for k in range(max_iter):
     # Add back contributions from affected rows/columns after gradient update
     sum_term = update_sum_term(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=+1)
 
+# Record final cost if not already recorded
+if k % 100 != 0:
+    tot_time = time.time()
+    time_list.append(tot_time - no_time - start_time)
+    cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
+
 cost_FW = np.array(cost_list)
 time_FW = np.array(time_list)
 
@@ -104,10 +111,11 @@ grad_xk = grad_p2(x_marg, y_marg, mask1, mask2, n_points)
 sum_term = np.sum(grad_xk * xk)
 
 for k in range(max_iter):
-    tot_time = time.time()
-    time_list.append(tot_time - no_time - start_time)
-    cost_list.append(cost_p2(xk, x_marg, y_marg, mu, nu))
-    no_time += time.time() - tot_time
+    if k % 100 == 0:
+        tot_time = time.time()
+        time_list.append(tot_time - no_time - start_time)
+        cost_list.append(cost_p2(xk, x_marg, y_marg, mu, nu))
+        no_time += time.time() - tot_time
 
     # search direction (returns 3n vector indices)
     vk = LMO_p2(xk, grad_xk, M, eps)
@@ -135,6 +143,12 @@ for k in range(max_iter):
     
     # Add back contributions from affected rows/columns after gradient update
     sum_term = update_sum_term_p2(sum_term, grad_xk, xk, vk, n_points, sign=+1)
+
+# Record final cost if not already recorded
+if k % 100 != 0:
+    tot_time = time.time()
+    time_list.append(tot_time - no_time - start_time)
+    cost_list.append(cost_p2(xk, x_marg, y_marg, mu, nu))
 
 cost_FW_p2 = np.array(cost_list)
 time_FW_p2 = np.array(time_list)
@@ -168,7 +182,7 @@ time_list = []
 start_time = time.time()
 
 # We need to modify the function to track time, so let's manually run it
-from FW_truncated import x_init_trunc, grad_trunc, LMO_x, LMO_s, gap_calc_trunc, \
+from FW_1dim_trunc import x_init_trunc, grad_trunc, LMO_x, LMO_s, gap_calc_trunc, \
     compute_gamma_max, step_calc as step_calc_trunc, update_grad_trunc, \
     vector_to_matrix
 
@@ -182,10 +196,11 @@ grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, mask1, mask2, c_trunc, p, n_po
 no_time = 0
 
 for k in range(max_iter):
-    tot_time = time.time()
-    time_list.append(tot_time - no_time - start_time)
-    cost_list.append(truncated_cost(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R))
-    no_time += time.time() - tot_time
+    if k % 100 == 0:
+        tot_time = time.time()
+        time_list.append(tot_time - no_time - start_time)
+        cost_list.append(truncated_cost(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R))
+        no_time += time.time() - tot_time
     
     # LMO call
     vk_x = LMO_x(xk, grad_xk_x, M, eps)
@@ -243,6 +258,12 @@ for k in range(max_iter):
     v_coords = (i_FW, j_FW, i_AFW, j_AFW)
     grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 
                                              mask1, mask2, p, n_points, R, v_coords, vk_s)
+
+# Record final cost if not already recorded
+if k % 100 != 0:
+    tot_time = time.time()
+    time_list.append(tot_time - no_time - start_time)
+    cost_list.append(truncated_cost(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R))
 
 cost_FW_trunc = np.array(cost_list)
 time_FW_trunc = np.array(time_list)

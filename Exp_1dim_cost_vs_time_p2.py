@@ -40,12 +40,13 @@ grad_xk = grad(x_marg, y_marg, mask1, mask2, p, c)
 
 # Initialize sum_term for efficient gap calculation
 sum_term = np.sum(grad_xk * xk)
-
+k = 0
 for k in range(max_iter):
-    tot_time = time.time()
-    time_list.append(tot_time - no_time - start_time)
-    cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
-    no_time += time.time() - tot_time
+    if k % 100 == 0:
+        tot_time = time.time()
+        time_list.append(tot_time - no_time - start_time)
+        cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
+        no_time += time.time() - tot_time
 
     # search direction
     vk = LMO(xk, grad_xk, M, eps)
@@ -76,6 +77,12 @@ for k in range(max_iter):
     # Add back contributions from affected rows/columns after gradient update
     sum_term = update_sum_term(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=+1)
 
+# Record final cost if not already recorded
+if k % 100 != 0:
+    tot_time = time.time()
+    time_list.append(tot_time - no_time - start_time)
+    cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
+
 cost_FW = np.array(cost_list)
 time_FW = np.array(time_list)
 
@@ -99,10 +106,11 @@ grad_xk = grad_p2(x_marg, y_marg, mask1, mask2, n)
 sum_term = np.sum(grad_xk * xk)
 
 for k in range(max_iter):
-    tot_time = time.time()
-    time_list.append(tot_time - no_time - start_time)
-    cost_list.append(cost_p2(xk, x_marg, y_marg, mu, nu))
-    no_time += time.time() - tot_time
+    if k % 100 == 0:
+        tot_time = time.time()
+        time_list.append(tot_time - no_time - start_time)
+        cost_list.append(cost_p2(xk, x_marg, y_marg, mu, nu))
+        no_time += time.time() - tot_time
 
     # search direction
     vk = LMO_p2(xk, grad_xk, M, eps)
@@ -141,6 +149,12 @@ for k in range(max_iter):
     
     # Add back contributions from affected rows/columns after gradient update
     sum_term = update_sum_term_p2(sum_term, grad_xk, xk, vk, n, sign=+1)
+
+# Record final cost if not already recorded
+if k % 100 != 0:
+    tot_time = time.time()
+    time_list.append(tot_time - no_time - start_time)
+    cost_list.append(cost_p2(xk, x_marg, y_marg, mu, nu))
 
 cost_FW_p2 = np.array(cost_list)
 time_FW_p2 = np.array(time_list)

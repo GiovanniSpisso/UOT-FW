@@ -42,10 +42,11 @@ grad_xk = grad(x_marg, y_marg, mask1, mask2, p, c)
 sum_term = np.sum(grad_xk * xk)
 
 for k in range(max_iter):
-    tot_time = time.time()
-    time_list.append(tot_time - no_time - start_time)
-    cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
-    no_time += time.time() - tot_time
+    if k % 100 == 0:
+        tot_time = time.time()
+        time_list.append(tot_time - no_time - start_time)
+        cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
+        no_time += time.time() - tot_time
 
     # search direction
     vk = LMO(xk, grad_xk, M, eps)
@@ -97,12 +98,13 @@ grad_xk = grad_p1_5(x_marg, y_marg, mask1, mask2, n)
 
 # Initialize sum_term for efficient gap calculation
 sum_term = np.sum(grad_xk * xk)
-
+k = 0
 for k in range(max_iter):
-    tot_time = time.time()
-    time_list.append(tot_time - no_time - start_time)
-    cost_list.append(cost_p1_5(xk, x_marg, y_marg, mu, nu))
-    no_time += time.time() - tot_time
+    if k % 100 == 0:
+        tot_time = time.time()
+        time_list.append(tot_time - no_time - start_time)
+        cost_list.append(cost_p1_5(xk, x_marg, y_marg, mu, nu))
+        no_time += time.time() - tot_time
 
     # search direction
     vk = LMO_p1_5(xk, grad_xk, M, eps)
@@ -144,6 +146,12 @@ for k in range(max_iter):
 
     # Add back contributions from affected entries after gradient update
     sum_term = update_sum_term_p1_5(sum_term, grad_xk, xk, (FW_i, FW_j, AFW_i, AFW_j), n, sign=+1)
+
+# Record final cost if not already recorded
+if k % 100 != 0:
+    tot_time = time.time()
+    time_list.append(tot_time - no_time - start_time)
+    cost_list.append(cost_p1_5(xk, x_marg, y_marg, mu, nu))
 
 cost_FW_p1_5 = np.array(cost_list)
 time_FW_p1_5 = np.array(time_list)

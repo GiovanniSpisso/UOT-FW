@@ -3,12 +3,13 @@ import numpy as np
 import cProfile
 import pstats
 
-from FW_2dim_p2 import PW_FW_dim2_p2
-from FW_2dim import PW_FW_dim2
 from FW_1dim import PW_FW_dim1, UOT_cost
 from FW_1dim_p2 import PW_FW_dim1_p2
 from FW_1dim_p1_5 import PW_FW_dim1_p1_5
-from FW_truncated import PW_FW_dim1_trunc, truncated_cost
+from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost
+from FW_2dim import PW_FW_dim2
+from FW_2dim_p2 import PW_FW_dim2_p2
+from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2
 
 
 def make_data(n, seed=0):
@@ -80,8 +81,8 @@ if __name__ == '__main__':
 
       # List of solvers to profile: (display_name, callable, pos_args_tuple, kw_args_dict)
       solvers = [
-            ('FW_2dim_p2', PW_FW_dim2_p2, (mu2, nu2, M2), {'step': 'optimal', 'max_iter': max_iter, 'delta': delta, 'eps': eps}),
-            ('FW_2dim', PW_FW_dim2, (mu2, nu2, M2, p_generic, c2d), {'step': 'armijo', 'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_2dim_p2', PW_FW_dim2_p2, (mu2, nu2, M2), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_2dim', PW_FW_dim2, (mu2, nu2, M2, p_generic, c2d), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim', PW_FW_dim1, (mu1, nu1, M1, p_generic, c), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim_p2', PW_FW_dim1_p2, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim_p1_5', PW_FW_dim1_p1_5, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
@@ -98,7 +99,7 @@ if __name__ == '__main__':
       print('COST COMPARISON: FW_1dim vs FW_1dim_p2')
       print('='*60)
       
-      if results.get('FW_1dim') and results.get('FW_1dim_p2'):
+      if results.get('FW_1dim') and results.get('FW_1dim_p2') and results.get('FW_1dim_p1_5'):
             xk_general, grad_general, x_marg_general, y_marg_general = results['FW_1dim']
             xk_p2, grad_p2, x_marg_p2, y_marg_p2 = results['FW_1dim_p2']
             xk_p1_5, grad_p1_5, x_marg_p1_5, y_marg_p1_5 = results['FW_1dim_p1_5']
@@ -125,13 +126,13 @@ if __name__ == '__main__':
       
       if results.get('FW_2dim') and results.get('FW_2dim_p2'):
             from FW_2dim import UOT_cost
-            from FW_2dim_p2 import UOT_cost_p2
+            from FW_2dim_p2 import cost_dim2_p2
             
             xk_2d, grad_2d, x_marg_2d, y_marg_2d = results['FW_2dim']
             xk_2d_p2, grad_2d_p2, x_marg_2d_p2, y_marg_2d_p2 = results['FW_2dim_p2']
             
             cost_2d_general = UOT_cost(xk_2d, x_marg_2d, y_marg_2d, c2d, mu2, nu2, p_generic)
-            cost_2d_p2_val = UOT_cost_p2(xk_2d_p2, x_marg_2d_p2, y_marg_2d_p2, mu2, nu2, 2)
+            cost_2d_p2_val = cost_dim2_p2(xk_2d_p2, x_marg_2d_p2, y_marg_2d_p2, mu2, nu2)
             
             print(f"\nFinal cost (FW_2dim):    {cost_2d_general:.10f}")
             print(f"Final cost (FW_2dim_p2): {cost_2d_p2_val:.10f}")

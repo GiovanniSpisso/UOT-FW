@@ -4,7 +4,7 @@ import os
 import time
 
 from FW_Sejourne import solve_uot_with_cost_tracking, primal_uot_value_from_atoms
-from FW_truncated import x_init_trunc, grad_trunc, LMO_x, LMO_s, gap_calc_trunc, \
+from FW_1dim_trunc import x_init_trunc, grad_trunc, LMO_x, LMO_s, gap_calc_trunc, \
     compute_gamma_max, step_calc as step_calc_trunc, update_grad_trunc, truncated_cost, UOT_cost_upper
 
 # Parameters
@@ -83,7 +83,7 @@ cost_full_estimates = [UOT_cost_upper(costs_trunc[0], n_points, s_i, R)]
 times_trunc = [0.0]
 
 start_time_trunc = time.time()
-
+k = 0
 for k in range(max_iter_fw - 1):
     # LMO calls
     vk_x = LMO_x(xk, grad_xk_x, M, eps)
@@ -149,15 +149,26 @@ for k in range(max_iter_fw - 1):
     v_coords = (i_FW, j_FW, i_AFW, j_AFW)
     grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 
                                              mask1, mask2, p, n_points, R, v_coords, vk_s)
+    
+    if k % 100 == 0:
+        cost_trunc = truncated_cost(xk, x_marg, y_marg, c_trunc, a, b, p, s_i, s_j, R)
+        costs_trunc.append(cost_trunc)
+        cost_full_estimate = UOT_cost_upper(cost_trunc, n_points, s_i, R)
+        cost_full_estimates.append(cost_full_estimate)
+        
+        elapsed_time = time.time() - start_time_trunc
+        times_trunc.append(elapsed_time)
+
+end_time_trunc = time.time()
+
+# Record final cost if not already recorded (in case convergence happened between cost updates)
+if k % 100 != 0:
     cost_trunc = truncated_cost(xk, x_marg, y_marg, c_trunc, a, b, p, s_i, s_j, R)
     costs_trunc.append(cost_trunc)
     cost_full_estimate = UOT_cost_upper(cost_trunc, n_points, s_i, R)
     cost_full_estimates.append(cost_full_estimate)
-    
-    elapsed_time = time.time() - start_time_trunc
+    elapsed_time = end_time_trunc - start_time_trunc
     times_trunc.append(elapsed_time)
-
-end_time_trunc = time.time()
 
 print(f"Truncated FW final cost: {costs_trunc[-1]:.6f}")
 print(f"Truncated FW final cost estimate (upper bound): {cost_full_estimates[-1]:.6f}")

@@ -4,7 +4,7 @@ Experiment: 1D Truncated Frank-Wolfe
 
 import numpy as np
 import time
-from FW_truncated import PW_FW_dim1_trunc, truncated_cost, UOT_cost_upper
+from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost, UOT_cost_upper
 
 
 # Parameters

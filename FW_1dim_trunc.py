@@ -51,7 +51,7 @@ def dUp_dx(x, p):
     
 
 '''
-Compute the total UOT cost:
+Compute the truncated UOT cost:
 Parameters:
   pi: transportation plan
   x_marg, y_marg: X and Y marginals of the transportation plan

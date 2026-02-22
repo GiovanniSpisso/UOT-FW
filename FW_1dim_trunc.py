@@ -198,16 +198,15 @@ def x_init_trunc(mu, nu, n, c, p):
     # Compute values only where mask is True, otherwise 0
     diag_values = np.zeros_like(mu, dtype=float)
     if np.any(mask):
-        mu_m = mu[mask]
         nu_m = nu[mask]
         if p == 2:
-            diag_values[mask] = 2 * mu_m * nu_m / (mu_m + nu_m)
+            diag_values[mask] = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
         elif p == 1:
-            diag_values[mask] = np.sqrt(mu_m * nu_m)
+            diag_values[mask] = np.sqrt(mu[mask] * nu[mask])
         elif p < 1:
-            diag_values[mask] = ((mu_m**(p-1) + nu_m**(p-1)) / (2 * (mu_m**(p-1) * nu_m**(p-1))))**(1/(1-p))
+            diag_values[mask] = ((mu[mask]**(p-1) + nu[mask]**(p-1)) / (2 * (mu[mask]**(p-1) * nu[mask]**(p-1))))**(1/(1-p))
         elif p > 1:  
-            diag_values[mask] = ((mu_m * nu_m) / (mu_m**(p-1) + nu_m**(p-1))**(1/(p-1))) * 2**(1/(p-1))
+            diag_values[mask] = ((mu[mask] * nu[mask]) / (mu[mask]**(p-1) + nu[mask]**(p-1))**(1/(p-1))) * 2**(1/(p-1))
     
     x[mask_c] = diag_values
 

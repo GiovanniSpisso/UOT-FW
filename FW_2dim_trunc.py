@@ -62,11 +62,9 @@ def truncated_cost_dim2(pi, x_marg, y_marg, c, mu, nu, p, s_i, s_j, R):
     # cost: array of length (2R-1)^2
     cost_transport = sum(c[k] * np.sum(pi[k]) for k in range(len(pi)))
 
-    mask_x = (mu != 0)
-    mask_y = (nu != 0)
     # Compute entropy only on non-zero measure indices
-    term_x = np.sum(mu[mask_x] * Up(x_marg[mask_x] + s_i, p))
-    term_y = np.sum(nu[mask_y] * Up(y_marg[mask_y] + s_j, p))
+    term_x = np.sum(mu * Up(x_marg + s_i, p))
+    term_y = np.sum(nu * Up(y_marg + s_j, p))
 
     C3 = R * np.sum(s_j * nu)
 
@@ -94,6 +92,8 @@ Returns:
 c : np.ndarray
     Cost matrix of shape ((2R-1)^2,) in vectorized form
     Each entry is the Euclidean distance from the center (R-1, R-1)
+displacement_map : list of tuples
+    List of (di, dj) displacements corresponding to each cost entry
 '''
 def cost_matrix_trunc_dim2(R):
     grid_size = 2 * R - 1
@@ -110,14 +110,14 @@ def cost_matrix_trunc_dim2(R):
         cost = np.sqrt(di**2 + dj**2)
         displacements.append((di, dj, cost))
     
-    # Sort by: 1) distance, 2) whether it's axis-aligned (|di|+|dj| for tie-break)
-    # This puts axis-aligned neighbors before diagonals at same Euclidean distance
+    # Sort by: 1) distance, 2) whether it's axis-aligned
     displacements.sort(key=lambda x: (x[2], abs(x[0]) + abs(x[1])))
     
-    # Extract just the costs in sorted order
+    # Extract costs and displacement mapping
     c = np.array([cost for _, _, cost in displacements])
+    displacement_map = [(di, dj) for di, dj, _ in displacements]
     
-    return c
+    return c, displacement_map
 
 
 '''
@@ -163,13 +163,13 @@ Parameters:
     x_marg, y_marg: X and Y marginals of the transportation plan
     mask1, mask2: masks for the gradient
     c: cost vector for the truncated problem
+    displacement_map: list of (di, dj) displacements corresponding to each cost entry
     p: main parameter that defines the p-entropy
     n: dimension
     R: truncation radius
 '''
-def grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c, p, n, R):
+def grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c, displacement_map, p, n, R):
     grid_size = 2 * R - 1
-    center = R - 1
     
     # Initialize gradient
     grad_x = np.zeros((grid_size**2, n, n))
@@ -180,24 +180,18 @@ def grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c, p, n, R):
     dx[mask1] = dUp_dx(x_marg[mask1], p)
     dy[mask2] = dUp_dx(y_marg[mask2], p)
     
-    # Iterate through each displacement
-    for k in range(grid_size**2):
-        # Get 2D displacement
-        grid_i = k // grid_size
-        grid_j = k % grid_size
-        di = grid_i - center
-        dj = grid_j - center
-        
+    # Iterate through each band k using the displacement map
+    for k, (di, dj) in enumerate(displacement_map):
         # Determine valid source and target slices
         if di >= 0:
-            source_i_slice = slice(0, n - di)
+            source_i_slice = slice(0, n - di) if di > 0 else slice(0, n)
             target_i_slice = slice(di, n)
         else:
             source_i_slice = slice(-di, n)
             target_i_slice = slice(0, n + di)
         
         if dj >= 0:
-            source_j_slice = slice(0, n - dj)
+            source_j_slice = slice(0, n - dj) if dj > 0 else slice(0, n)
             target_j_slice = slice(dj, n)
         else:
             source_j_slice = slice(-dj, n)
@@ -218,20 +212,136 @@ def grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c, p, n, R):
         )
     
     # Gradients for truncated supports
-    grad_si = np.where(mask1, 1/2*R + dx, 0)
-    grad_sj = np.where(mask2, 1/2*R + dy, 0)
+    grad_si = np.where(mask1, R + dx, 0)
+    grad_sj = np.where(mask2, R + dy, 0)
     
     return grad_x, (grad_si, grad_sj)
 
 
 '''
-Linear Minimization Oracle (LMO) for the transportation plan
+Linear Minimization Oracle for truncated 2D representation.
 Parameters:
-    pi: current transportation plan
-    grad_x: gradient with respect to the transport plan
-    grad_s: gradient with respect to the truncated supports
-    M: upper bound for generalized simplex
-    eps: direction tolerance
+  pi: transportation plan, shape ((2R-1)^2, n, n)
+  grad: gradient of UOT, shape ((2R-1)^2, n, n)
+  displacement_map: list of (di, dj) tuples for each matrix index
+  M: upper bound for generalized simplex
+  eps: tolerance
+Returns:
+  i_FW: Tuple ((mat_idx, i, j), (i, j, k, l)) or ((-1,-1,-1), (-1,-1,-1,-1))
+  i_AFW: Tuple ((mat_idx, i, j), (i, j, k, l)) or ((-1,-1,-1), (-1,-1,-1,-1))
 '''
-def LMO_x_dim2(pi, grad_x, M, eps):
-    return
+def LMO_trunc_dim2_x(pi, grad, displacement_map, M, eps=0.001):
+    n = pi.shape[1]
+    
+    def compact_to_full(matrix_idx, i, j):
+        """Convert compact (mat_idx, i, j) to full (i, j, k, l)."""
+        if matrix_idx == -1:
+            return (-1, -1, -1, -1)
+        di, dj = displacement_map[matrix_idx]
+        k = i + di
+        l = j + dj
+        return (i, j, k, l)
+    
+    # Frank-Wolfe direction (minimize gradient)
+    flat_idx = np.argmin(grad)
+    min_val = grad.flat[flat_idx]
+    
+    if min_val < -eps:
+        # Manual unraveling: flat_idx -> (matrix_idx, i, j)
+        matrix_idx = flat_idx // (n * n)
+        position = flat_idx % (n * n)
+        i = position // n
+        j = position % n
+        compact_FW = (matrix_idx, i, j)
+        full_FW = compact_to_full(matrix_idx, i, j)
+        i_FW = (compact_FW, full_FW)
+    else:
+        i_FW = ((-1, -1, -1), (-1, -1, -1, -1))
+
+    # Away Frank-Wolfe direction (maximize gradient among active set)
+    mask = (pi > 0)
+
+    if not np.any(mask):
+        return i_FW, ((-1, -1, -1), (-1, -1, -1, -1))
+    
+    grad_masked = np.where(mask, grad, -np.inf)
+    max_val = grad_masked.max()
+    
+    if max_val <= eps:
+        if pi.sum() < M:
+            return i_FW, ((-1, -1, -1), (-1, -1, -1, -1))
+        else:
+            print(f"Warning: M={M}, pi.sum()={pi.sum():.2f}. Increase M!")
+            return i_FW, ((-1, -1, -1), (-1, -1, -1, -1))
+
+    flat_idx = np.argmax(grad_masked)
+    
+    # Manual unraveling
+    matrix_idx = flat_idx // (n * n)
+    position = flat_idx % (n * n)
+    i = position // n
+    j = position % n
+    compact_AFW = (matrix_idx, i, j)
+    full_AFW = compact_to_full(matrix_idx, i, j)
+    i_AFW = (compact_AFW, full_AFW)
+    
+    return i_FW, i_AFW
+
+
+'''
+Linear Minimization Oracle for truncated supports S_i, S_j.
+Parameters:
+    si, sj: truncated supports
+    grad_s: tuple of gradients (grad_si, grad_sj)
+    M: upper bound for generalized simplex
+    eps: tolerance
+    mask1, mask2: masks for valid positions in si and sj
+'''
+def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mask1, mask2):
+    grad_si, grad_sj = grad_s
+    
+    # Mask invalid positions (set to inf to exclude from argmin)
+    grad_si_valid = np.where(mask1, grad_si, np.inf)
+    grad_sj_valid = np.where(mask2, grad_sj, np.inf)
+
+    # Frank-Wolfe direction (minimize gradient)
+    if (grad_si_valid.min() + grad_sj_valid.min()) < -eps:
+        # Find 2D positions of minima
+        FW_si = np.unravel_index(np.argmin(grad_si_valid), grad_si_valid.shape)
+        FW_sj = np.unravel_index(np.argmin(grad_sj_valid), grad_sj_valid.shape)
+    else:
+        FW_si, FW_sj = -1, -1
+    
+    # Away Frank-Wolfe direction (maximize gradient among active set)
+    mask_si = (si > 0)
+    mask_sj = (sj > 0)
+    
+    if not np.any(mask_si) and not np.any(mask_sj):
+        return (FW_si, FW_sj, -1, -1)
+    
+    # Mask: only active entries with valid measure
+    grad_si_masked = np.where(mask_si & mask1, grad_si, -np.inf)
+    grad_sj_masked = np.where(mask_sj & mask2, grad_sj, -np.inf)
+
+    max_val_si = grad_si_masked.max()
+    max_val_sj = grad_sj_masked.max()
+
+    if (max_val_si + max_val_sj) <= eps:
+        if (np.sum(si + sj) < M):
+            return (FW_si, FW_sj, -1, -1)
+        else:
+            print(f"M: {M}, sum(si+sj): {np.sum(si+sj):.2f}. Increase M!")
+            return (FW_si, FW_sj, -1, -1)
+
+    # Find 2D positions of maxima
+    AFW_si = np.unravel_index(np.argmax(grad_si_masked), grad_si_masked.shape)
+    AFW_sj = np.unravel_index(np.argmax(grad_sj_masked), grad_sj_masked.shape)
+
+    return (FW_si, FW_sj, AFW_si, AFW_sj)
+
+
+'''
+Gap calculation for truncated problem
+'''
+def gap_calc_trunc_dim2():
+    pass

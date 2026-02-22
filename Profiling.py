@@ -9,7 +9,7 @@ from FW_1dim_p1_5 import PW_FW_dim1_p1_5
 from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost
 from FW_2dim import PW_FW_dim2
 from FW_2dim_p2 import PW_FW_dim2_p2
-from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2
+#from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2
 
 
 def make_data(n, seed=0):

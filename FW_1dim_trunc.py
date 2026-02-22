@@ -453,7 +453,7 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     # Armijo line search
     diff = obj_change(theta)
     while diff > beta * theta * inner:
-        theta = gamma * theta
+        theta *= gamma
         diff = obj_change(theta)
     
     return theta
@@ -487,13 +487,16 @@ def step_calc(x_marg, y_marg, grad_x, grad_s,
     return step, FW_ix, FW_jx, AFW_ix, AFW_jx
 
 
+'''
+Compute maximum step size respecting all constraints on x, s_i, s_j
+Parameters:
+    xk: current transportation plan
+    s_i, s_j: current truncated supports
+    FW_x, AFW_x: vector indices for x search directions
+    FW_si, AFW_si, FW_sj, AFW_sj: indices for s search directions
+    M: upper bound for generalized simplex
+'''
 def compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M):
-    """
-    Compute maximum step size respecting all constraints on x, s_i, s_j
-    
-    Returns:
-      gamma_max: maximum allowed step size
-    """
     gamma_max = np.inf
     
     # Constraints from x coordinates
@@ -563,38 +566,36 @@ def update_grad_trunc(x_marg, y_marg, si, sj, grad_x, grad_s,
     grad_si, grad_sj = grad_s
     
     for i in affected_i:
-        if mask1[i]:
-            dx_i = dUp_dx(x_marg[i] + si[i], p)
-            # Update grad_si
-            grad_si[i] = 1/2*R + dx_i
-            
-            # Update grad_x for all diagonals containing row i
-            for k in range(-R + 1, R):
-                # Check if column j = i + k is valid
-                j = i + k
-                if 0 <= j < n and mask2[j]:
-                    # Find vector index for (i, j)
-                    idx = matrix_indices_to_vector_index(i, j, n, R)
-                    if idx is not None:
-                        dy_j = dUp_dx(y_marg[j] + sj[j], p)
-                        grad_x[idx] = abs(k) + dx_i + dy_j
+        dx_i = dUp_dx(x_marg[i] + si[i], p)
+        # Update grad_si
+        grad_si[i] = 1/2*R + dx_i
+        
+        # Update grad_x for all diagonals containing row i
+        for k in range(-R + 1, R):
+            # Check if column j = i + k is valid
+            j = i + k
+            if 0 <= j < n and mask2[j]:
+                # Find vector index for (i, j)
+                idx = matrix_indices_to_vector_index(i, j, n, R)
+                if idx is not None:
+                    dy_j = dUp_dx(y_marg[j] + sj[j], p)
+                    grad_x[idx] = abs(k) + dx_i + dy_j
     
     for j in affected_j:
-        if mask2[j]:
-            dy_j = dUp_dx(y_marg[j] + sj[j], p)
-            # Update grad_sj
-            grad_sj[j] = 1/2*R + dy_j
-            
-            # Update grad_x for all diagonals containing column j
-            for k in range(-R + 1, R):
-                # Check if row i = j - k is valid
-                i = j - k
-                if 0 <= i < n and mask1[i] and i not in affected_i:  # Skip if already updated
-                    # Find vector index for (i, j)
-                    idx = matrix_indices_to_vector_index(i, j, n, R)
-                    if idx is not None:
-                        dx_i = dUp_dx(x_marg[i] + si[i], p)
-                        grad_x[idx] = abs(k) + dx_i + dy_j
+        dy_j = dUp_dx(y_marg[j] + sj[j], p)
+        # Update grad_sj
+        grad_sj[j] = 1/2*R + dy_j
+        
+        # Update grad_x for all diagonals containing column j
+        for k in range(-R + 1, R):
+            # Check if row i = j - k is valid
+            i = j - k
+            if 0 <= i < n and mask1[i] and i not in affected_i:  # Skip if already updated
+                # Find vector index for (i, j)
+                idx = matrix_indices_to_vector_index(i, j, n, R)
+                if idx is not None:
+                    dx_i = dUp_dx(x_marg[i] + si[i], p)
+                    grad_x[idx] = abs(k) + dx_i + dy_j
     
     return grad_x, (grad_si, grad_sj)
 

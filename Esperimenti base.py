@@ -1,6 +1,7 @@
+from matplotlib.pylab import gamma
 import numpy as np
 from FW_2dim_trunc import cost_matrix_trunc_dim2, x_init_trunc_dim2, grad_trunc_dim2, \
-    truncated_cost_dim2, LMO_trunc_dim2_x, LMO_trunc_dim2_s, gap_calc_trunc_dim2
+    truncated_cost_dim2, LMO_trunc_dim2_x, LMO_trunc_dim2_s, gap_calc_trunc_dim2, armijo_trunc_dim2
 from FW_2dim_p2 import x_init_dim2_p2, grad_dim2_p2, LMO_dim2_p2, gap_calc_dim2_p2, \
     opt_step_dim2_p2, grad_update_dim2_p2, apply_step_dim2_p2, update_sum_term_dim2_p2, cost_dim2_p2
 
@@ -60,3 +61,16 @@ print("si_FW = ", FW_si)
 print("si_AFW = ", AFW_si)
 print("sj_FW = ", FW_sj)
 print("sj_AFW = ", AFW_sj)
+
+gap_trunc = gap_calc_trunc_dim2(x_trunc, grad_trunc, i_FW_trunc[0], M, s_i, s_j, (grad_si, grad_sj), (FW_si, FW_sj))
+print("gap_trunc = ", gap_trunc)
+sum_term = np.sum(grad * x)
+gap = gap_calc_dim2_p2(grad, i_FW[0], M, sum_term)
+print("gap = ", gap)
+
+gamma_trunc = armijo_trunc_dim2(x_marg_trunc, y_marg_trunc, grad_trunc, (grad_si, grad_sj), mu, nu, 
+                                (i_FW_trunc, i_AFW_trunc), (FW_si, FW_sj, AFW_si, AFW_sj), 
+                                s_i, s_j, c_trunc, p, R)
+print("gamma trunc = ", gamma_trunc)
+gamma = opt_step_dim2_p2(x_marg, y_marg, mu, nu, (i_FW[0][0], i_AFW[0][0]), (i_FW[1], i_AFW[1]))
+print("gamma = ", gamma)

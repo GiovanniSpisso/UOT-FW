@@ -310,14 +310,14 @@ def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mask1, mask2):
         FW_si = np.unravel_index(np.argmin(grad_si_valid), grad_si_valid.shape)
         FW_sj = np.unravel_index(np.argmin(grad_sj_valid), grad_sj_valid.shape)
     else:
-        FW_si, FW_sj = -1, -1
+        FW_si, FW_sj = (-1, -1), (-1, -1)
     
     # Away Frank-Wolfe direction (maximize gradient among active set)
     mask_si = (si > 0)
     mask_sj = (sj > 0)
     
     if not np.any(mask_si) and not np.any(mask_sj):
-        return (FW_si, FW_sj, -1, -1)
+        return (FW_si, FW_sj, (-1, -1), (-1, -1))
     
     # Mask: only active entries with valid measure
     grad_si_masked = np.where(mask_si & mask1, grad_si, -np.inf)
@@ -328,10 +328,10 @@ def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mask1, mask2):
 
     if (max_val_si + max_val_sj) <= eps:
         if (np.sum(si + sj) < M):
-            return (FW_si, FW_sj, -1, -1)
+            return (FW_si, FW_sj, (-1, -1), (-1, -1))
         else:
             print(f"M: {M}, sum(si+sj): {np.sum(si+sj):.2f}. Increase M!")
-            return (FW_si, FW_sj, -1, -1)
+            return (FW_si, FW_sj, (-1, -1), (-1, -1))
 
     # Find 2D positions of maxima
     AFW_si = np.unravel_index(np.argmax(grad_si_masked), grad_si_masked.shape)
@@ -342,6 +342,285 @@ def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mask1, mask2):
 
 '''
 Gap calculation for truncated problem
+Parameters:
+  x: current transportation plan
+  grad_x: gradient with respect to the transport plan
+  comp_FW: compact index of the FW direction for x (or -1 if no FW)
+  M: upper bound for generalized simplex
+  s_i, s_j: current truncated supports
+  grad_s: gradient with respect to the truncated supports
+  FW_v_s: LMO result for the truncated supports
 '''
-def gap_calc_trunc_dim2():
-    pass
+def gap_calc_trunc_dim2(x, grad_x, comp_FW, M, s_i, s_j, grad_s, FW_v_s):
+    # ---- gap for supports s_i, s_j ----
+    grad_si, grad_sj = grad_s
+    gap_s = np.sum(s_i * grad_si) + np.sum(s_j * grad_sj)
+
+    FW_si, FW_sj = FW_v_s
+    if FW_si != (-1, -1):
+        gap_s -= M * (grad_si[FW_si] + grad_sj[FW_sj])
+
+    # ---- gap for transport plan xk ----
+    gap_x = np.sum(x * grad_x)
+
+    if comp_FW[0] != -1:
+        gap_x -= M * grad_x[comp_FW]
+
+    return gap_x + gap_s
+
+
+'''
+Armijo line search for 2D truncated UOT, sparse evaluation.
+Parameters:
+    x_marg, y_marg: X and Y marginals of the transportation plan
+    grad_x: gradient wrt compact plan, shape ((2R-1)^2, n, n)
+    grad_s: (grad_si, grad_sj), each shape (n, n)
+    mu, nu: measures
+    vk_x: ((comp_FW, full_FW), (comp_AFW, full_AFW))
+        comp_* = (mat_idx, i, j) in compact representation
+        full_* = (x1, x2, y1, y2) in full coordinates
+    vk_s: (FW_si, FW_sj, AFW_si, AFW_sj) each either (a,b) or (-1,-1)
+    s_i, s_j: truncated supports
+    c_trunc: cost vector for truncated problem
+    p: entropy parameter
+    R: truncation radius
+    theta, beta, gamma: Armijo parameters
+'''
+def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
+                      s_i, s_j, c_trunc, p, R, theta=1.0, beta=0.4, gamma=0.5):
+    
+    (comp_FW, full_FW), (comp_AFW, full_AFW) = vk_x
+    FW_si, FW_sj, AFW_si, AFW_sj = vk_s
+    grad_si, grad_sj = grad_s
+
+    # directional derivative <grad, d>
+    inner = 0.0
+    if comp_FW[0] != -1:
+        inner += grad_x[comp_FW]
+    if comp_AFW[0] != -1:
+        inner -= grad_x[comp_AFW]
+    if FW_si != -1:
+        inner += grad_si[FW_si]
+    if AFW_si != -1:
+        inner -= grad_si[AFW_si]
+    if FW_sj != -1:
+        inner += grad_sj[FW_sj]
+    if AFW_sj != -1:
+        inner -= grad_sj[AFW_sj]
+
+    # Objective change: sum of cost and entropy terms
+    def obj_change(theta_val):
+        diff = 0.0
+
+        # Cost terms for x
+        if comp_FW[0] != -1:
+            diff += theta_val * c_trunc[comp_FW[0]]
+        if comp_AFW[0] != -1:
+            diff -= theta_val * c_trunc[comp_AFW[0]]
+
+        # Net changes on marginals (avoid double counting when indices overlap)
+        dx_updates = {}  # (i,j) -> delta to x_marg at that entry
+        dy_updates = {}  # (k,l) -> delta to y_marg at that entry
+
+        def add_update(dct, key, val):
+            if key in dct:
+                dct[key] += val
+            else:
+                dct[key] = val
+
+        # From plan FW/AFW
+        if full_FW[0] != -1:
+            x1, x2, y1, y2 = full_FW
+            add_update(dx_updates, (x1, x2), +theta_val / mu[x1, x2])
+            add_update(dy_updates, (y1, y2), +theta_val / nu[y1, y2])
+
+        if full_AFW[0] != -1:
+            x1, x2, y1, y2 = full_AFW
+            add_update(dx_updates, (x1, x2), -theta_val / mu[x1, x2])
+            add_update(dy_updates, (y1, y2), -theta_val / nu[y1, y2])
+
+        # From supports s_i, s_j
+        if FW_si != -1:
+            add_update(dx_updates, FW_si, +theta_val / mu[FW_si])
+        if AFW_si != -1:
+            add_update(dx_updates, AFW_si, -theta_val / mu[AFW_si])
+
+        if FW_sj != -1:
+            add_update(dy_updates, FW_sj, +theta_val / nu[FW_sj])
+        if AFW_sj != -1:
+            add_update(dy_updates, AFW_sj, -theta_val / nu[AFW_sj])
+
+        # Entropy terms for x_marg, y_marg (apply net changes per index)
+        for (i, j), d in dx_updates.items():
+            diff += (Up(x_marg[i, j] + s_i[i, j] + d, p) - Up(x_marg[i, j] + s_i[i, j], p)) * mu[i, j]
+
+        for (k, l), d in dy_updates.items():
+            diff += (Up(y_marg[k, l] + s_j[k, l] + d, p) - Up(y_marg[k, l] + s_j[k, l], p)) * nu[k, l]
+
+        # # R penalty term for s_j 
+        if FW_sj != -1:
+            diff += R * theta_val
+        if AFW_sj != -1:
+            diff -= R * theta_val
+
+        return diff
+
+    diff = obj_change(theta)
+    while diff > beta * theta * inner:
+        theta *= gamma
+        diff = obj_change(theta)
+
+    return theta
+
+'''
+Stepsize calculation
+Parameters:
+  x_marg, y_marg: X and Y marginals of the transportation plan
+  grad_x, grad_s: gradients of UOT
+  mu, nu: measures
+  vk_x, vk_s: search directions
+  s_i, s_j: truncated supports
+  c: cost function
+  p: main parameter
+  n, R: problem dimensions
+  theta, beta, gamma: Armijo parameters
+'''
+def step_calc_trunc_dim2(x_marg, y_marg, grad_x, grad_s, 
+                         mu, nu, vk_x, vk_s, s_i, s_j, c_trunc, p, R,
+                         theta=1.0, beta=0.4, gamma=0.5):
+    return armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s, 
+                             s_i, s_j, c_trunc, p, R, theta=theta, beta=beta, gamma=gamma)
+
+
+'''
+Compute maximum step size respecting all constraints on x, s_i, s_j
+Parameters:
+    x: transportation plan, shape ((2R-1)**2, n, n)
+    s_i, s_j: truncated supports
+    FW_x / AFW_x: indices for x, compact indices (mat_idx, i, j) or (-1,-1,-1)
+    FW_si/AFW_si/FW_sj/AFW_sj: indices for s, (i,j) or -1
+    M: upper bound for generalized simplex
+'''
+def compute_gamma_max_trunc_dim2(x, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M):
+    gamma_max = np.inf
+
+    # constraints from x
+    if AFW_x is not None and AFW_x[0] != -1:
+        gamma_max = min(gamma_max, x[AFW_x])
+    elif FW_x is not None and FW_x[0] != -1:
+        gamma_max = min(gamma_max, M - np.sum(x) + x[FW_x])
+
+    # constraints from s_i
+    if FW_si != -1:
+        gamma_max = min(gamma_max, M - np.sum(s_i) + s_i[FW_si])
+    if AFW_si != -1:
+        gamma_max = min(gamma_max, s_i[AFW_si])
+
+    # constraints from s_j
+    if FW_sj != -1:
+        gamma_max = min(gamma_max, M - np.sum(s_j) + s_j[FW_sj])
+    if AFW_sj != -1:
+        gamma_max = min(gamma_max, s_j[AFW_sj])
+
+    return gamma_max
+
+
+def build_disp_to_k(displacement_map):
+    """Map (di,dj) -> k index in the compact representation."""
+    return {d: k for k, d in enumerate(displacement_map)}
+
+'''
+Function to update the gradient of plan + truncated supports
+Only updates affected entries based on the vertices used (FW and AFW)
+Parameters:
+    x_marg, y_marg: X and Y marginals
+    si, sj: truncated supports
+    grad_x: gradient with respect to plan (vector form)
+    grad_s: tuple (grad_si, grad_sj)
+    mask1, mask2: masks for valid indices
+    p: entropy parameter
+    n: dimension
+    R: truncation radius
+    v_coords: (i_FW, j_FW, i_AFW, j_AFW) - matrix indices for x
+    vk_s: LMO result for s (FW_si, FW_sj, AFW_si, AFW_sj) - matrix indices
+'''
+def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s, mask1, mask2,
+                           displacement_map, p, R, vk_x, vk_s):
+
+    (comp_FW, full_FW), (comp_AFW, full_AFW) = vk_x
+    FW_si, FW_sj, AFW_si, AFW_sj = vk_s
+    grad_si, grad_sj = grad_s
+
+    n = x_marg.shape[0]
+    disp_to_k = build_disp_to_k(displacement_map)
+
+    # Collect affected source and target indices
+    affected_src = set()
+    affected_tgt = set()
+
+    # from plan FW/AFW (full indices are (x1,x2,y1,y2))
+    if full_FW[0] != -1:
+        x1, x2, y1, y2 = full_FW
+        affected_src.add((x1, x2))
+        affected_tgt.add((y1, y2))
+    if full_AFW[0] != -1:
+        x1, x2, y1, y2 = full_AFW
+        affected_src.add((x1, x2))
+        affected_tgt.add((y1, y2))
+
+    # from supports
+    if FW_si != -1:
+        affected_src.add(FW_si)
+    if AFW_si != -1:
+        affected_src.add(AFW_si)
+    if FW_sj != -1:
+        affected_tgt.add(FW_sj)
+    if AFW_sj != -1:
+        affected_tgt.add(AFW_sj)
+
+    # Update grad_s at affected pixels 
+    for (i, j) in affected_src:
+        if mask1[i, j]:
+            dx = dUp_dx(x_marg[i, j] + s_i[i, j], p)
+            grad_si[i, j] = 1/2*R + dx  
+
+    for (k, l) in affected_tgt:
+        if mask2[k, l]:
+            dy = dUp_dx(y_marg[k, l] + s_j[k, l], p)
+            grad_sj[k, l] = 1/2*R + dy  
+
+    # ---- helper: update grad_x for a fixed source (i,j) over all displacements ----
+    def update_grad_x_for_source(i, j):
+        if not mask1[i, j]:
+            return
+        dx = dUp_dx(x_marg[i, j] + s_i[i, j], p)
+
+        # for each displacement, target is (i+di, j+dj) and plan entry is grad_x[k,i,j]
+        for (di, dj), k_idx in disp_to_k.items():
+            ti = i + di
+            tj = j + dj
+            if 0 <= ti < n and 0 <= tj < n and mask2[ti, tj]:
+                dy = dUp_dx(y_marg[ti, tj] + s_j[ti, tj], p)
+                grad_x[k_idx, i, j] = (k_cost := None)  # placeholder
+
+    # ---- helper: update grad_x for a fixed target (k,l) over all displacements ----
+    def update_grad_x_for_target(k, l):
+        if not mask2[k, l]:
+            return
+        dy = dUp_dx(y_marg[k, l] + s_j[k, l], p)
+
+        # source must satisfy (i+di = k, j+dj = l) => (i,j) = (k-di, l-dj)
+        for (di, dj), k_idx in disp_to_k.items():
+            i = k - di
+            j = l - dj
+            if 0 <= i < n and 0 <= j < n and mask1[i, j]:
+                dx = dUp_dx(x_marg[i, j] + s_i[i, j], p)
+                grad_x[k_idx, i, j] = (k_cost := None)  # placeholder
+
+    # The two placeholders above are where cost enters:
+    # grad_x[k,i,j] = c[k] + dx + dy
+    #
+    # But update_grad_trunc_dim2 needs c available.
+    # So either pass c as argument, or close over it.
+
+    return grad_x, (grad_si, grad_sj)

@@ -503,7 +503,7 @@ def apply_step_dim2_p2(xk, x_marg, y_marg, mu, nu, M,
     
     if x1AFW != -1:
         # AFW exists
-        gamma0 = xk[mat_AFW, i_AFW, j_AFW] - 1e-10
+        gamma0 = xk[mat_AFW, i_AFW, j_AFW]
         gammak = min(gammak_opt, gamma0)
         
         xk[mat_AFW, i_AFW, j_AFW] -= gammak
@@ -517,7 +517,7 @@ def apply_step_dim2_p2(xk, x_marg, y_marg, mu, nu, M,
     
     else:
         # Only FW
-        gamma0 = M - np.sum(xk) + xk[mat_FW, i_FW, j_FW] - 1e-10
+        gamma0 = M - np.sum(xk) + xk[mat_FW, i_FW, j_FW]
         gammak = min(gammak_opt, gamma0)
         
         xk[mat_FW, i_FW, j_FW] += gammak

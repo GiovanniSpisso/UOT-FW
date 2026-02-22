@@ -212,8 +212,8 @@ def grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c, displacement_map, p, n, R):
         )
     
     # Gradients for truncated supports
-    grad_si = np.where(mask1, R + dx, 0)
-    grad_sj = np.where(mask2, R + dy, 0)
+    grad_si = np.where(mask1, 1/2*R + dx, 0)
+    grad_sj = np.where(mask2, 1/2*R + dy, 0)
     
     return grad_x, (grad_si, grad_sj)
 
@@ -530,35 +530,35 @@ def build_disp_to_k(displacement_map):
     return {d: k for k, d in enumerate(displacement_map)}
 
 '''
-Function to update the gradient of plan + truncated supports
-Only updates affected entries based on the vertices used (FW and AFW)
-Parameters:
-    x_marg, y_marg: X and Y marginals
-    si, sj: truncated supports
-    grad_x: gradient with respect to plan (vector form)
-    grad_s: tuple (grad_si, grad_sj)
-    mask1, mask2: masks for valid indices
-    p: entropy parameter
-    n: dimension
-    R: truncation radius
-    v_coords: (i_FW, j_FW, i_AFW, j_AFW) - matrix indices for x
-    vk_s: LMO result for s (FW_si, FW_sj, AFW_si, AFW_sj) - matrix indices
+Gradient update for 2D truncated representation.
+Parameters
+    x_marg, y_marg : (n,n) arrays
+    s_i, s_j       : (n,n) arrays
+    grad_x         : (K,n,n) array, K = (2R-1)^2
+    grad_s         : tuple (grad_si, grad_sj), each (n,n)
+    mask1, mask2   : (n,n) boolean masks
+    c_trunc        : (K,) cost vector aligned with displacement_map
+    displacement_map : list[(di,dj)] length K
+    p, R           : parameters
+    vk_x           : ((comp_FW, full_FW), (comp_AFW, full_AFW))
+                     comp_* = (mat_idx,i,j) or (-1,-1,-1)
+                     full_* = (x1,x2,y1,y2) or (-1,-1,-1,-1)
+    vk_s           : (FW_si, FW_sj, AFW_si, AFW_sj) where each is (i,j) or (-1,-1)
 '''
-def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s, mask1, mask2,
-                           displacement_map, p, R, vk_x, vk_s):
-
-    (comp_FW, full_FW), (comp_AFW, full_AFW) = vk_x
+def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s,
+                           mask1, mask2, c_trunc, displacement_map,
+                           p, R, vk_x, vk_s):
+    (_, full_FW), (_, full_AFW) = vk_x
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     grad_si, grad_sj = grad_s
 
     n = x_marg.shape[0]
-    disp_to_k = build_disp_to_k(displacement_map)
+    K = (2 * R - 1) ** 2
 
-    # Collect affected source and target indices
+    # Collect affected source/target pixels (in full grid coordinates)
     affected_src = set()
     affected_tgt = set()
 
-    # from plan FW/AFW (full indices are (x1,x2,y1,y2))
     if full_FW[0] != -1:
         x1, x2, y1, y2 = full_FW
         affected_src.add((x1, x2))
@@ -568,59 +568,64 @@ def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s, mask1, mask
         affected_src.add((x1, x2))
         affected_tgt.add((y1, y2))
 
-    # from supports
-    if FW_si != -1:
+    if FW_si != (-1, -1):
         affected_src.add(FW_si)
-    if AFW_si != -1:
+    if AFW_si != (-1, -1):
         affected_src.add(AFW_si)
-    if FW_sj != -1:
+
+    if FW_sj != (-1, -1):
         affected_tgt.add(FW_sj)
-    if AFW_sj != -1:
+    if AFW_sj != (-1, -1):
         affected_tgt.add(AFW_sj)
 
-    # Update grad_s at affected pixels 
+    # Compute dUp_dx only where needed
+    dx_cache = {}
+    dy_cache = {}
+
+    def get_dx(i, j):
+        key = (i, j)
+        if key not in dx_cache:
+            dx_cache[key] = dUp_dx(x_marg[i, j] + s_i[i, j], p) if mask1[i, j] else 0.0
+        return dx_cache[key]
+
+    def get_dy(k, l):
+        key = (k, l)
+        if key not in dy_cache:
+            dy_cache[key] = dUp_dx(y_marg[k, l] + s_j[k, l], p) if mask2[k, l] else 0.0
+        return dy_cache[key]
+
+    # Update grad_s at affected pixels
     for (i, j) in affected_src:
         if mask1[i, j]:
-            dx = dUp_dx(x_marg[i, j] + s_i[i, j], p)
-            grad_si[i, j] = 1/2*R + dx  
+            grad_si[i, j] = 0.5 * R + get_dx(i, j)
 
     for (k, l) in affected_tgt:
         if mask2[k, l]:
-            dy = dUp_dx(y_marg[k, l] + s_j[k, l], p)
-            grad_sj[k, l] = 1/2*R + dy  
+            grad_sj[k, l] = 0.5 * R + get_dy(k, l)
 
-    # ---- helper: update grad_x for a fixed source (i,j) over all displacements ----
-    def update_grad_x_for_source(i, j):
-        if not mask1[i, j]:
-            return
-        dx = dUp_dx(x_marg[i, j] + s_i[i, j], p)
+    # Update grad_x entries impacted by affected sources
+    # For fixed source (i,j): grad_x[k,i,j] changes for all k where target in bounds & mask2.
+    for (i, j) in affected_src:
+        dx_val = get_dx(i, j)
 
-        # for each displacement, target is (i+di, j+dj) and plan entry is grad_x[k,i,j]
-        for (di, dj), k_idx in disp_to_k.items():
+        for k_idx in range(K):
+            di, dj = displacement_map[k_idx]
             ti = i + di
             tj = j + dj
             if 0 <= ti < n and 0 <= tj < n and mask2[ti, tj]:
-                dy = dUp_dx(y_marg[ti, tj] + s_j[ti, tj], p)
-                grad_x[k_idx, i, j] = (k_cost := None)  # placeholder
+                grad_x[k_idx, i, j] = c_trunc[k_idx] + dx_val + get_dy(ti, tj)
 
-    # ---- helper: update grad_x for a fixed target (k,l) over all displacements ----
-    def update_grad_x_for_target(k, l):
-        if not mask2[k, l]:
-            return
-        dy = dUp_dx(y_marg[k, l] + s_j[k, l], p)
+    # Update grad_x entries impacted by affected targets
+    # For fixed target (k,l): all sources (i,j) such that (i+di,j+dj)=(k,l) for some displacement.
+    # i.e. for each displacement (di,dj): source = (k-di, l-dj) updates entry grad_x[k_idx, source]
+    for (k, l) in affected_tgt:
+        dy_val = get_dy(k, l)
 
-        # source must satisfy (i+di = k, j+dj = l) => (i,j) = (k-di, l-dj)
-        for (di, dj), k_idx in disp_to_k.items():
+        for k_idx in range(K):
+            di, dj = displacement_map[k_idx]
             i = k - di
             j = l - dj
             if 0 <= i < n and 0 <= j < n and mask1[i, j]:
-                dx = dUp_dx(x_marg[i, j] + s_i[i, j], p)
-                grad_x[k_idx, i, j] = (k_cost := None)  # placeholder
-
-    # The two placeholders above are where cost enters:
-    # grad_x[k,i,j] = c[k] + dx + dy
-    #
-    # But update_grad_trunc_dim2 needs c available.
-    # So either pass c as argument, or close over it.
+                grad_x[k_idx, i, j] = c_trunc[k_idx] + get_dx(i, j) + dy_val
 
     return grad_x, (grad_si, grad_sj)

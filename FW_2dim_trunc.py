@@ -399,13 +399,13 @@ def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
         inner += grad_x[comp_FW]
     if comp_AFW[0] != -1:
         inner -= grad_x[comp_AFW]
-    if FW_si != -1:
+    if FW_si != (-1,-1):
         inner += grad_si[FW_si]
-    if AFW_si != -1:
+    if AFW_si != (-1,-1):
         inner -= grad_si[AFW_si]
-    if FW_sj != -1:
+    if FW_sj != (-1,-1):
         inner += grad_sj[FW_sj]
-    if AFW_sj != -1:
+    if AFW_sj != (-1,-1):
         inner -= grad_sj[AFW_sj]
 
     # Objective change: sum of cost and entropy terms
@@ -440,14 +440,14 @@ def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
             add_update(dy_updates, (y1, y2), -theta_val / nu[y1, y2])
 
         # From supports s_i, s_j
-        if FW_si != -1:
+        if FW_si != (-1,-1):
             add_update(dx_updates, FW_si, +theta_val / mu[FW_si])
-        if AFW_si != -1:
+        if AFW_si != (-1,-1):
             add_update(dx_updates, AFW_si, -theta_val / mu[AFW_si])
 
-        if FW_sj != -1:
+        if FW_sj != (-1,-1):
             add_update(dy_updates, FW_sj, +theta_val / nu[FW_sj])
-        if AFW_sj != -1:
+        if AFW_sj != (-1,-1):
             add_update(dy_updates, AFW_sj, -theta_val / nu[AFW_sj])
 
         # Entropy terms for x_marg, y_marg (apply net changes per index)
@@ -458,9 +458,9 @@ def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
             diff += (Up(y_marg[k, l] + s_j[k, l] + d, p) - Up(y_marg[k, l] + s_j[k, l], p)) * nu[k, l]
 
         # # R penalty term for s_j 
-        if FW_sj != -1:
+        if FW_sj != (-1,-1):
             diff += R * theta_val
-        if AFW_sj != -1:
+        if AFW_sj != (-1,-1):
             diff -= R * theta_val
 
         return diff
@@ -511,15 +511,15 @@ def compute_gamma_max_trunc_dim2(x, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj,
         gamma_max = min(gamma_max, M - np.sum(x) + x[FW_x])
 
     # constraints from s_i
-    if FW_si != -1:
+    if FW_si != (-1,-1):
         gamma_max = min(gamma_max, M - np.sum(s_i) + s_i[FW_si])
-    if AFW_si != -1:
+    if AFW_si != (-1,-1):
         gamma_max = min(gamma_max, s_i[AFW_si])
 
     # constraints from s_j
-    if FW_sj != -1:
+    if FW_sj != (-1,-1):
         gamma_max = min(gamma_max, M - np.sum(s_j) + s_j[FW_sj])
-    if AFW_sj != -1:
+    if AFW_sj != (-1,-1):
         gamma_max = min(gamma_max, s_j[AFW_sj])
 
     return gamma_max
@@ -629,3 +629,120 @@ def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s,
                 grad_x[k_idx, i, j] = c_trunc[k_idx] + get_dx(i, j) + dy_val
 
     return grad_x, (grad_si, grad_sj)
+
+
+'''
+Apply one pairwise FW step for the 2D truncated problem.
+Parameters:
+    are the natural 2D analogues of apply_step_trunc (1D), but:
+  - vk_x = (i_FW, i_AFW) with i_* = (compact_*, full_*)
+  - compact_* = (mat_idx, i, j) or (-1,-1,-1)
+  - full_*    = (x1, x2, y1, y2) or (-1,-1,-1,-1)
+  - vk_s = (FW_si, FW_sj, AFW_si, AFW_sj) where each is (i,j) or (-1,-1)
+'''
+def apply_step_trunc_dim2(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
+                          mu, nu, M, vk_x, vk_s, c_trunc, p, R):
+    (comp_FW, full_FW), (comp_AFW, full_AFW) = vk_x
+    FW_si, FW_sj, AFW_si, AFW_sj = vk_s
+
+    # Max feasible step
+    gamma_max = compute_gamma_max_trunc_dim2(
+        xk, s_i, s_j,
+        FW_x=comp_FW, AFW_x=comp_AFW,
+        FW_si=FW_si, AFW_si=AFW_si,
+        FW_sj=FW_sj, AFW_sj=AFW_sj,
+        M=M)
+
+    # Armijo step with theta upper bound = gamma_max
+    gammak = step_calc_trunc_dim2(
+        x_marg, y_marg, grad_xk_x, grad_xk_s,
+        mu, nu, vk_x, vk_s,
+        s_i, s_j, c_trunc, p, R,
+        theta=gamma_max)
+
+    # Update plan xk and marginals via full indices
+    # Away part
+    if comp_AFW[0] != -1:
+        xk[comp_AFW] -= gammak
+        x1, x2, y1, y2 = full_AFW
+        x_marg[x1, x2] -= gammak / mu[x1, x2]
+        y_marg[y1, y2] -= gammak / nu[y1, y2]
+
+        if comp_FW[0] != -1:
+            xk[comp_FW] += gammak
+            x1, x2, y1, y2 = full_FW
+            x_marg[x1, x2] += gammak / mu[x1, x2]
+            y_marg[y1, y2] += gammak / nu[y1, y2]
+
+    # Pure FW part
+    elif comp_FW[0] != -1:
+        xk[comp_FW] += gammak
+        x1, x2, y1, y2 = full_FW
+        x_marg[x1, x2] += gammak / mu[x1, x2]
+        y_marg[y1, y2] += gammak / nu[y1, y2]
+
+    # Update supports s_i, s_j
+    if FW_si != (-1, -1):
+        s_i[FW_si] += gammak / mu[FW_si]
+        s_j[FW_sj] += gammak / nu[FW_sj]
+    if AFW_si != (-1, -1):
+        s_i[AFW_si] -= gammak / mu[AFW_si]
+        s_j[AFW_sj] -= gammak / nu[AFW_sj]
+
+    return xk, x_marg, y_marg, s_i, s_j
+
+
+'''
+Pairwise Frank-Wolfe for 2D truncated UOT.
+Parameters:
+    mu, nu: measures (n x n arrays)
+    M: upper bound for generalized simplex
+    p: entropy parameter
+    R: truncation radius
+    max_iter: maximum iterations
+    delta: convergence threshold for the gap
+    eps: tolerance for LMO directions
+'''
+def PW_FW_dim2_trunc(mu, nu, M, p, R,
+                     max_iter=100, delta=0.01, eps=0.001):
+    n = mu.shape[0]
+
+    # cost + displacement map
+    c_trunc, displacement_map = cost_matrix_trunc_dim2(R)
+
+    # initialization
+    xk, x_marg, y_marg, mask1, mask2 = x_init_trunc_dim2(mu, nu, n, R, p)
+    s_i = np.zeros((n, n))
+    s_j = np.zeros((n, n))
+
+    grad_xk_x, grad_xk_s = grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c_trunc, displacement_map, p, n, R)
+
+    for k in range(max_iter):
+        # LMO
+        i_FW, i_AFW = LMO_trunc_dim2_x(xk, grad_xk_x, displacement_map, M, eps=eps)
+        vk_x = (i_FW, i_AFW)
+
+        FW_si, FW_sj, AFW_si, AFW_sj = LMO_trunc_dim2_s(s_i, s_j, grad_xk_s, M, eps, mask1, mask2)
+        vk_s = (FW_si, FW_sj, AFW_si, AFW_sj)
+
+        # gap
+        gap = gap_calc_trunc_dim2(xk, grad_xk_x, i_FW[0], M, s_i, s_j, grad_xk_s, (FW_si, FW_sj))
+
+        # stopping
+        no_x_dir = (i_FW[0][0] == -1 and i_AFW[0][0] == -1)
+        no_s_dir = (FW_si == (-1, -1) and AFW_si == (-1, -1))
+        if (gap <= delta) or (no_x_dir and no_s_dir):
+            print("Converged after:", k, "iterations")
+            return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j
+
+        # step
+        xk, x_marg, y_marg, s_i, s_j = apply_step_trunc_dim2(
+            xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
+            mu, nu, M, vk_x, vk_s, c_trunc, p, R)
+
+        # gradient update (incremental)
+        grad_xk_x, grad_xk_s = update_grad_trunc_dim2(
+            x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
+            mask1, mask2, c_trunc, displacement_map, p, R, vk_x, vk_s)
+
+    return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

@@ -1,17 +1,16 @@
 Problemi da risolvere e cose da fare
-1. aggiorno FW_2dim (tutti)
 
-2. Sistemo stampa risultati (es. 10% iterazioni)
+1. Sistemo stampa risultati (es. 10% iterazioni)
    Faccio un po di plot vari sul codice unidimensionale
    esperimenti variando parametri: p, n, R
 
-3. Confronti con Sejourne:
+2. Confronti con Sejourne:
     Confronto con codice nel loro paper (fig3): vedere quale è il loro primale
     controlla come mai il loro duale partendo dal nostro punto poi peggiora invece di migliorare.
     ATTENZIONE: sarebbe meglio runnare il loro codice con homogeneous ma fa peggio, capire come mai.
     
 
-4. Confronti / applicazioni:
+3. Confronti / applicazioni:
     Test su cui balanced fallisce e serve UOT
     Verifico che UOT è robusto rispetto agli outliers
     Esperimenti "pratici" con grande numero variabili solo per FW ottimizzato

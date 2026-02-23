@@ -9,7 +9,7 @@ from FW_1dim_p1_5 import PW_FW_dim1_p1_5
 from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost
 from FW_2dim import PW_FW_dim2
 from FW_2dim_p2 import PW_FW_dim2_p2
-#from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2
+from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_trunc_dim2
 
 
 def make_data(n, seed=0):
@@ -83,6 +83,7 @@ if __name__ == '__main__':
       solvers = [
             ('FW_2dim_p2', PW_FW_dim2_p2, (mu2, nu2, M2), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_2dim', PW_FW_dim2, (mu2, nu2, M2, p_generic, c2d), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_2dim_trunc', PW_FW_dim2_trunc, (mu2, nu2, M2, p_generic, R), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim', PW_FW_dim1, (mu1, nu1, M1, p_generic, c), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim_p2', PW_FW_dim1_p2, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim_p1_5', PW_FW_dim1_p1_5, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
@@ -136,6 +137,23 @@ if __name__ == '__main__':
             
             print(f"\nFinal cost (FW_2dim):    {cost_2d_general:.10f}")
             print(f"Final cost (FW_2dim_p2): {cost_2d_p2_val:.10f}")
+
+      if results.get('FW_2dim_trunc'):
+            xk_2d_trunc, grad_2d_trunc, x_marg_2d_trunc, y_marg_2d_trunc, s_i_2d_trunc, s_j_2d_trunc = results['FW_2dim_trunc']
+            c2d_trunc, _ = cost_matrix_trunc_dim2(R)
+            cost_2d_trunc_val = truncated_cost_dim2(
+                  xk_2d_trunc,
+                  x_marg_2d_trunc,
+                  y_marg_2d_trunc,
+                  c2d_trunc,
+                  mu2,
+                  nu2,
+                  p_generic,
+                  s_i_2d_trunc,
+                  s_j_2d_trunc,
+                  R,
+            )
+            print(f"Final cost (FW_2dim_trunc): {cost_2d_trunc_val:.10f}")
             
       print('\n' + '='*60)
       print('All profiling runs completed.\n')

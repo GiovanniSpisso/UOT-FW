@@ -21,7 +21,8 @@ c = np.abs(np.subtract.outer(np.arange(n), np.arange(n))) # cost function
 p = 2                                                     # power of the entropy
 M = 2 * (np.sum(mu) + np.sum(nu))                         # upper bound for delimiting the generalized simplex
 R = 2                                                     # truncation radius
-max_iter = 2000                          
+max_iter = 2000
+sample_freq = max(1, max_iter // 10)                      # sample 10% of iterations
 delta = 0.001                                             # tolerance to stop the gap
 eps = 0.001                                               # tolerance for calculating the descent direction
 
@@ -46,7 +47,7 @@ grad_xk = grad(x_marg, y_marg, mask1, mask2, p, c)
 sum_term = np.sum(grad_xk * xk)
 k = 0
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
@@ -111,7 +112,7 @@ grad_xk = grad_p2(x_marg, y_marg, mask1, mask2, n_points)
 sum_term = np.sum(grad_xk * xk)
 
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(cost_p2(xk, x_marg, y_marg, mu, nu))
@@ -196,7 +197,7 @@ grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, mask1, mask2, c_trunc, p, n_po
 no_time = 0
 
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(truncated_cost(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R))
@@ -260,7 +261,7 @@ for k in range(max_iter):
                                              mask1, mask2, p, n_points, R, v_coords, vk_s)
 
 # Record final cost if not already recorded
-if k % 100 != 0:
+if k % sample_freq != 0:
     tot_time = time.time()
     time_list.append(tot_time - no_time - start_time)
     cost_list.append(truncated_cost(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R))

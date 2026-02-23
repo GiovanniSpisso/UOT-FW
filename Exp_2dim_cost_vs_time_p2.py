@@ -25,7 +25,8 @@ nu = np.random.randint(1, 2001, size = (n,n))
 # Main parameters to set
 p = 2                                                     # power of the entropy
 M = 2 * (np.sum(mu) + np.sum(nu))                         # upper bound for delimiting the generalized simplex
-max_iter = 100                          
+max_iter = 10000
+sample_freq = max(1, max_iter // 10)                      # sample 10% of iterations
 delta = 0.001                                             # tolerance to stop the gap
 eps = 0.001                                               # tolerance for calculating the descent direction
 
@@ -131,9 +132,6 @@ eps = 0.001                                               # tolerance for calcul
 ###########################################################
 print("\nComputing Cost VS Time for FW for p=2")
 
-# Parameters
-max_iter = 1000
-
 # transportation plan, marginals and gradient initialization
 cost_list = []
 time_list = []
@@ -148,7 +146,7 @@ sum_term = np.sum(grad_xk * xk)
 
 k = 0
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(cost_dim2_p2(xk, x_marg, y_marg, mu, nu))
@@ -178,7 +176,7 @@ for k in range(max_iter):
     sum_term = update_sum_term_dim2_p2(sum_term, grad_xk, xk, full_FW, full_AFW, n, sign=1)
 
 # Record final cost if not already recorded
-if k % 100 != 0:
+if k % sample_freq != 0:
     tot_time = time.time()
     time_list.append(tot_time - no_time - start_time)
     cost_list.append(cost_dim2_p2(xk, x_marg, y_marg, mu, nu))

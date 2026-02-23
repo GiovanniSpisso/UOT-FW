@@ -22,7 +22,8 @@ nu = np.random.randint(0, 101, size=(n, n))
 p = 2                                                     # power of the entropy
 M = 2 * (np.sum(mu) + np.sum(nu))                         # upper bound for delimiting the generalized simplex
 R = 2                                                     # truncation radius
-max_iter = 2000                          
+max_iter = 2000
+sample_freq = max(1, max_iter // 10)                      # sample 10% of iterations
 delta = 0.001                                             # tolerance to stop the gap
 eps = 0.001                                               # tolerance for calculating the descent direction
 
@@ -52,7 +53,7 @@ grad_xk = grad_dim2(x_marg, y_marg, mask1, mask2, p, c)
 sum_term = np.sum(grad_xk * xk)
 k = 0
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
@@ -88,7 +89,7 @@ for k in range(max_iter):
     sum_term = update_sum_term_dim2(sum_term, grad_xk, xk, mask1, mask2, source_coords, target_coords, sign=1)
 
 # Record final cost if not already recorded
-if k % 100 != 0:
+if k % sample_freq != 0:
     tot_time = time.time()
     time_list.append(tot_time - no_time - start_time)
     cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
@@ -118,7 +119,7 @@ grad_xk = grad_dim2_p2(x_marg, y_marg, mask1, mask2, n)
 sum_term = np.sum(grad_xk * xk)
 
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(cost_dim2_p2(xk, x_marg, y_marg, mu, nu))
@@ -180,7 +181,7 @@ grad_xk_x, grad_xk_s = grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c_trunc, di
 no_time = 0
 
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(truncated_cost_dim2(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R))
@@ -210,7 +211,7 @@ for k in range(max_iter):
                                                   R, vk_x, vk_s)
 
 # Record final cost if not already recorded
-if k % 100 != 0:
+if k % sample_freq != 0:
     tot_time = time.time()
     time_list.append(tot_time - no_time - start_time)
     cost_list.append(truncated_cost_dim2(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R))

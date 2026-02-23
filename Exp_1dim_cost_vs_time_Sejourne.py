@@ -61,6 +61,7 @@ c_trunc = np.concatenate([
 # Truncated FW setup
 M = 2 * (np.sum(a) + np.sum(b))
 max_iter_fw = 1000
+sample_freq = max(1, max_iter_fw // 10)                    # sample 10% of iterations
 delta = 0.01
 eps = 0.001
 
@@ -150,7 +151,7 @@ for k in range(max_iter_fw - 1):
     grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 
                                              mask1, mask2, p, n_points, R, v_coords, vk_s)
     
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         cost_trunc = truncated_cost(xk, x_marg, y_marg, c_trunc, a, b, p, s_i, s_j, R)
         costs_trunc.append(cost_trunc)
         cost_full_estimate = UOT_cost_upper(cost_trunc, n_points, s_i, R)
@@ -162,7 +163,7 @@ for k in range(max_iter_fw - 1):
 end_time_trunc = time.time()
 
 # Record final cost if not already recorded (in case convergence happened between cost updates)
-if k % 100 != 0:
+if k % sample_freq != 0:
     cost_trunc = truncated_cost(xk, x_marg, y_marg, c_trunc, a, b, p, s_i, s_j, R)
     costs_trunc.append(cost_trunc)
     cost_full_estimate = UOT_cost_upper(cost_trunc, n_points, s_i, R)

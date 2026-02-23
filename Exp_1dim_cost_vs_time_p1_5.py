@@ -20,6 +20,7 @@ c = np.abs(np.subtract.outer(np.arange(n), np.arange(n))) # cost function
 p = 1.5                                                   # power of the entropy
 M = 2 * (np.sum(mu) + np.sum(nu))                         # upper bound for delimiting the generalized simplex
 max_iter = 1000
+sample_freq = max(1, max_iter // 10)                      # sample 10% of iterations
 delta = 0.001                                             # tolerance to stop the gap
 eps = 0.001                                               # tolerance for calculating the descent direction
 
@@ -42,7 +43,7 @@ grad_xk = grad(x_marg, y_marg, mask1, mask2, p, c)
 sum_term = np.sum(grad_xk * xk)
 
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(UOT_cost(xk, x_marg, y_marg, c, mu, nu, p))
@@ -100,7 +101,7 @@ grad_xk = grad_p1_5(x_marg, y_marg, mask1, mask2, n)
 sum_term = np.sum(grad_xk * xk)
 k = 0
 for k in range(max_iter):
-    if k % 100 == 0:
+    if k % sample_freq == 0:
         tot_time = time.time()
         time_list.append(tot_time - no_time - start_time)
         cost_list.append(cost_p1_5(xk, x_marg, y_marg, mu, nu))
@@ -148,7 +149,7 @@ for k in range(max_iter):
     sum_term = update_sum_term_p1_5(sum_term, grad_xk, xk, (FW_i, FW_j, AFW_i, AFW_j), n, sign=+1)
 
 # Record final cost if not already recorded
-if k % 100 != 0:
+if k % sample_freq != 0:
     tot_time = time.time()
     time_list.append(tot_time - no_time - start_time)
     cost_list.append(cost_p1_5(xk, x_marg, y_marg, mu, nu))

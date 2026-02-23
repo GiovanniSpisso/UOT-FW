@@ -1,7 +1,6 @@
 Problemi da risolvere e cose da fare
 
-1. Sistemo stampa risultati (es. 10% iterazioni)
-   Faccio un po di plot vari sul codice unidimensionale
+1. Faccio un po di plot vari sul codice unidimensionale
    esperimenti variando parametri: p, n, R
 
 2. Confronti con Sejourne:
@@ -19,39 +18,8 @@ Problemi da risolvere e cose da fare
 
 
 
-# PARAMETRI PLOTS
-# cost_vs_time_p2(n1000_p2_delta0.001_eps0.001_iter1000)
-np.random.seed(0)
-n = 1000 
-mu = np.random.randint(0, 101, size = n)
-nu = np.random.randint(0, 101, size = n)
-c = np.abs(np.subtract.outer(np.arange(n), np.arange(n))) 
-p = 2                                                     
-M = n * (np.sum(mu) + np.sum(nu))                         
-max_iter = 1000                          
-delta = 0.001                                             
-eps = 0.001                                               
-
-# cost_vs_time_p2(n2000_p2_delta0.1_eps0.001_iter1000)
-np.random.seed(0)
-n = 2000 
-mu = np.random.randint(0, 501, size = n)
-nu = np.random.randint(0, 501, size = n)
-c = np.abs(np.subtract.outer(np.arange(n), np.arange(n))) 
-p = 2                                                     
-M = n * (np.sum(mu) + np.sum(nu))                         
-max_iter = 1000                          
-delta = 0.1                                             
-eps = 0.001  
-
-
-np.random.seed(0)
-n = 1000
-mu = np.random.randint(1, 2001, size = n)
-nu = np.random.randint(1, 2001, size = n)
-c = np.abs(np.subtract.outer(np.arange(n), np.arange(n))) 
-p = 1.5                                           
-M = 2 * (np.sum(mu) + np.sum(nu))                
-max_iter = 1000
-delta = 0.001                                             
-eps = 0.001                                               
+Idee grafi per esperimenti:
+    Cost vs Time (a parità di tutti i parametri, si confrontano codici diversi)
+    For 2 dimensional codes: mass transport with some images 
+    esperimenti variando parametri: p, n, R (troncata / codice con p = 2, cosa di preciso?)   
+                                           

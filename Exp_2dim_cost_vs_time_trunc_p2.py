@@ -13,7 +13,7 @@ from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_tru
 # Set seed for replicability
 np.random.seed(0)
 # Grid size
-n = 40  
+n = 100  
 # Define two positive and discrete measures
 mu = np.random.randint(0, 101, size=(n, n))
 nu = np.random.randint(0, 101, size=(n, n))

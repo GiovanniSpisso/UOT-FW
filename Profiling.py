@@ -141,18 +141,8 @@ if __name__ == '__main__':
       if results.get('FW_2dim_trunc'):
             xk_2d_trunc, grad_2d_trunc, x_marg_2d_trunc, y_marg_2d_trunc, s_i_2d_trunc, s_j_2d_trunc = results['FW_2dim_trunc']
             c2d_trunc, _ = cost_matrix_trunc_dim2(R)
-            cost_2d_trunc_val = truncated_cost_dim2(
-                  xk_2d_trunc,
-                  x_marg_2d_trunc,
-                  y_marg_2d_trunc,
-                  c2d_trunc,
-                  mu2,
-                  nu2,
-                  p_generic,
-                  s_i_2d_trunc,
-                  s_j_2d_trunc,
-                  R,
-            )
+            cost_2d_trunc_val = truncated_cost_dim2(xk_2d_trunc, x_marg_2d_trunc, y_marg_2d_trunc, c2d_trunc,
+                                                    mu2, nu2, p_generic, s_i_2d_trunc, s_j_2d_trunc, R)
             print(f"Final cost (FW_2dim_trunc): {cost_2d_trunc_val:.10f}")
             
       print('\n' + '='*60)

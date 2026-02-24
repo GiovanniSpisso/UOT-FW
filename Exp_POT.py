@@ -51,14 +51,14 @@ a = mu.ravel()
 b = nu.ravel()
 
 start_pot = time.time()
-result_pot = ot.solve_sample(X_a, X_b, a, b, metric='euclidean', unbalanced=0.5)
+result_pot = ot.solve_sample(X_a, X_b, a, b, metric='euclidean', unbalanced=1)
 #ot.lowrank_sinkhorn(X_a, X_b, a, b, reg=0, rank=None, alpha=1e-10, 
 #					rescale_cost=True, init='random', reg_init=0.1, seed_init=49, 
 #					gamma_init='rescale', numItermax=2000, stopThr=1e-07, warn=True, log=False)
 #ot.sinkhorn_unbalanced(a, b, M, reg, reg_m, method='sinkhorn', reg_type='kl')
 elapsed_pot = time.time() - start_pot
 
-res_trunc = trunc_2dim(mu, nu, p=1, R=2, max_iter=10000, delta=0.001, eps=0.001)
+res_trunc = trunc_2dim(mu, nu, p=1, R=2, max_iter=1000, delta=0.001, eps=0.001)
 
 final_plan = result_pot.plan
 

@@ -1,76 +1,60 @@
-from matplotlib.pylab import gamma
+import ot
+import time
 import numpy as np
-from FW_2dim_trunc import cost_matrix_trunc_dim2, x_init_trunc_dim2, grad_trunc_dim2, \
-    truncated_cost_dim2, LMO_trunc_dim2_x, LMO_trunc_dim2_s, gap_calc_trunc_dim2, armijo_trunc_dim2
-from FW_2dim_p2 import x_init_dim2_p2, grad_dim2_p2, LMO_dim2_p2, gap_calc_dim2_p2, \
-    opt_step_dim2_p2, grad_update_dim2_p2, apply_step_dim2_p2, update_sum_term_dim2_p2, cost_dim2_p2
+from FW_1dim import PW_FW_dim1, UOT_cost
+from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost
 
 # Set precision to 3 decimal places
 np.set_printoptions(precision=3, suppress=True)
 
 np.random.seed(0)
 # Number of support point
-n = 2  
+n = 200  
 R = 2
-p = 2
+p = 1
 # Define two positive and discrete measures
-mu = np.array([[0, 1], [0.2, 0.8]])
-nu = np.array([[1, 0.5], [2, 0.2]])
-print("mu = ", mu)
-print("nu = ", nu)
+mu = np.random.randint(1, 100, size=n)
+nu = np.random.randint(1, 100, size=n)
 
-M = 2 * (np.sum(mu) + np.sum(nu))
+M = n * (np.sum(mu) + np.sum(nu))
+delta = 0.001
 eps = 0.001
+max_iter = 1000
 
-c_trunc, displacement_map = cost_matrix_trunc_dim2(R)
-print("cost matrix trunc: ", c_trunc)
-print("displacement map: ", displacement_map)
+c = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
+c_trunc = np.concatenate([np.full(n - abs(k), abs(k)) for k in range(-R + 1, R)])
 
-x_trunc, x_marg_trunc, y_marg_trunc, mask1_trunc, mask2_trunc = x_init_trunc_dim2(mu, nu, n, R, p)
-x, x_marg, y_marg, mask1, mask2 = x_init_dim2_p2(mu, nu, n)
-print("x_trunc = \n", x_trunc)
-print("x = \n", x)
-print("x_marg_trunc = \n", x_marg_trunc)
-print("x_marg = \n", x_marg)
-print("y_marg_trunc = \n", y_marg_trunc)
-print("y_marg = \n", y_marg)
+start_full = time.time()
+xk_1d, grad_1d, x_marg_1d, y_marg_1d = PW_FW_dim1(mu, nu, M, p, c, 
+                                                  max_iter = max_iter, delta = delta, eps = eps)
+elapsed_full = time.time() - start_full
+cost_1d_general = UOT_cost(xk_1d, x_marg_1d, y_marg_1d, c, mu, nu, p)
+print("Cost of FW_1dim: ", cost_1d_general)
+print("FW_1dim time: ", elapsed_full, "seconds")
 
-grad_trunc, (grad_si, grad_sj) = grad_trunc_dim2(x_marg_trunc, y_marg_trunc, mask1_trunc, mask2_trunc, c_trunc, displacement_map, p, n, R)
-grad = grad_dim2_p2(x_marg, y_marg, mask1, mask2, n)
-print("grad_trunc = \n", grad_trunc)
-print("grad_si = \n", grad_si)
-print("grad_sj = \n", grad_sj)
-print("grad = \n", grad)
+start_trunc = time.time()
+xk_trunc, (grad_xk_x_trunc, grad_xk_s_trunc), x_marg_trunc, y_marg_trunc, s_i, s_j = PW_FW_dim1_trunc(mu, nu, M, p, c_trunc, R,
+                                                                                                      max_iter = max_iter, delta = delta, eps = eps)
+elapsed_trunc = time.time() - start_trunc
 
-s_i, s_j = np.zeros((n,n)), np.zeros((n,n))
+#print("xk_trunc: ", xk_trunc)
+cost_trunc = truncated_cost(xk_trunc, x_marg_trunc, y_marg_trunc, c_trunc, mu, nu, p, s_i, s_j, R)
+print("Cost of FW_1dim_trunc: ", cost_trunc)
+print("FW_1dim_trunc time: ", elapsed_trunc, "seconds")
 
-truncated_cost = truncated_cost_dim2(x_trunc, x_marg_trunc, y_marg_trunc, c_trunc, 
-                                     mu, nu, p, s_i, s_j, R)
-cost = cost_dim2_p2(x, x_marg, y_marg, mu, nu)
-print("truncated cost = ", truncated_cost)
-print("cost = ", cost)
 
-i_FW_trunc, i_AFW_trunc = LMO_trunc_dim2_x(x_trunc, grad_trunc, displacement_map, M)
-print("i_FW_trunc = ", i_FW_trunc)
-print("i_AFW_trunc = ", i_AFW_trunc)
-i_FW, i_AFW = LMO_dim2_p2(x, grad, M)
-print("i_FW = ", i_FW)
-print("i_AFW = ", i_AFW)
-FW_si, FW_sj, AFW_si, AFW_sj = LMO_trunc_dim2_s(s_i, s_j, (grad_si, grad_sj), M, eps, mask1_trunc, mask2_trunc)
-print("si_FW = ", FW_si)
-print("si_AFW = ", AFW_si)
-print("sj_FW = ", FW_sj)
-print("sj_AFW = ", AFW_sj)
+X_a = np.arange(n, dtype=np.float64).reshape(-1, 1)
+X_b = X_a.copy()
 
-gap_trunc = gap_calc_trunc_dim2(x_trunc, grad_trunc, i_FW_trunc[0], M, s_i, s_j, (grad_si, grad_sj), (FW_si, FW_sj))
-print("gap_trunc = ", gap_trunc)
-sum_term = np.sum(grad * x)
-gap = gap_calc_dim2_p2(grad, i_FW[0], M, sum_term)
-print("gap = ", gap)
+a = mu.ravel()
+b = nu.ravel()
 
-gamma_trunc = armijo_trunc_dim2(x_marg_trunc, y_marg_trunc, grad_trunc, (grad_si, grad_sj), mu, nu, 
-                                (i_FW_trunc, i_AFW_trunc), (FW_si, FW_sj, AFW_si, AFW_sj), 
-                                s_i, s_j, c_trunc, p, R)
-print("gamma trunc = ", gamma_trunc)
-gamma = opt_step_dim2_p2(x_marg, y_marg, mu, nu, (i_FW[0][0], i_AFW[0][0]), (i_FW[1], i_AFW[1]))
-print("gamma = ", gamma)
+start_pot = time.time()
+result_pot = ot.solve_sample(X_a, X_b, a, b, metric='euclidean', unbalanced=1)
+elapsed_pot = time.time() - start_pot
+final_plan = result_pot.plan
+x_marg_final = np.sum(final_plan, axis=1)/mu  # sum over j and nu dimensions
+y_marg_final = np.sum(final_plan, axis=0)/nu  # sum over i and mu dimensions
+print("\nPOT cost calculated by me: ", UOT_cost(final_plan, x_marg_final, y_marg_final, c, mu, nu, 1))
+print("POT unbalanced KL cost:", result_pot.value)
+print("POT time: ", elapsed_pot, "seconds")

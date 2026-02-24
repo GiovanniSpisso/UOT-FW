@@ -96,10 +96,7 @@ def x_init_dim2(mu, nu, p, n):
         )**(1/(1-p))
 
     else:  # p > 1
-        vals = (
-            (mu[mask] * nu[mask]) /
-            (mu[mask]**(p-1) + nu[mask]**(p-1))
-        )**(1/(p-1)) * 2**(1/(p-1))
+        vals = (mu[mask] * nu[mask]) / (mu[mask]**(p-1) + nu[mask]**(p-1))**(1/(p-1)) * 2**(1/(p-1))
 
     x[mask, mask] = vals
 

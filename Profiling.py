@@ -15,13 +15,13 @@ from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_tru
 def make_data(n, seed=0):
       np.random.seed(seed)
       # 1D measures: size n
-      mu1 = np.random.randint(0, 100, size=n)
-      nu1 = np.random.randint(0, 100, size=n)
+      mu1 = np.random.randint(1, 100, size=n)
+      nu1 = np.random.randint(1, 100, size=n)
       c1 = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
 
       # 2D measures: size n x n
-      mu2 = np.random.randint(1, 1001, size=(n, n))
-      nu2 = np.random.randint(1, 1001, size=(n, n))
+      mu2 = np.random.randint(1, 100, size=(n, n))
+      nu2 = np.random.randint(1, 100, size=(n, n))
 
       return mu1, nu1, c1, mu2, nu2
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
             results[name] = result
 
       print('\n' + '='*60)
-      print('COST COMPARISON: FW_1dim vs FW_1dim_p2')
+      print('DIMENSION 1: COST COMPARISON')
       print('='*60)
       
       if results.get('FW_1dim') and results.get('FW_1dim_p2') and results.get('FW_1dim_p1_5'):
@@ -119,10 +119,10 @@ if __name__ == '__main__':
       if results.get('FW_truncated'):
             xk_trunc, grad_trunc, x_marg_trunc, y_marg_trunc, s_i, s_j = results['FW_truncated']
             cost_trunc = truncated_cost(xk_trunc, x_marg_trunc, y_marg_trunc, c_trunc, mu1, nu1, p_generic, s_i, s_j, R)
-            print(f"Final cost (FW_truncated): {cost_trunc:.10f}")
+            print(f"Final cost (FW_1dim_trunc): {cost_trunc:.10f}")
       
       print('\n' + '='*60)
-      print('COST COMPARISON: FW_2dim vs FW_2dim_p2')
+      print('DIMENSION 2: COST COMPARISON')
       print('='*60)
       
       if results.get('FW_2dim') and results.get('FW_2dim_p2'):

@@ -81,9 +81,9 @@ Parameters:
   c: cost function (vector form)
   mu, nu: measures
 '''
-def UOT_cost_upper(cost_trunc, n, si, R):
+def UOT_cost_upper(cost_trunc, n, si, R, mu):
   K = n - 1 - R # Supposing c = |i-j|
-  return cost_trunc + K * np.sum(si)
+  return cost_trunc + K * np.sum(si * mu)
 
 
 def vector_to_matrix(vec, n, R):
@@ -198,7 +198,6 @@ def x_init_trunc(mu, nu, n, c, p):
     # Compute values only where mask is True, otherwise 0
     diag_values = np.zeros_like(mu, dtype=float)
     if np.any(mask):
-        nu_m = nu[mask]
         if p == 2:
             diag_values[mask] = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
         elif p == 1:
@@ -302,14 +301,13 @@ Parameters:
     grad_s: gradient with respect to the truncated supports
     M: upper bound for generalized simplex
     eps: direction tolerance
+    mu, nu: measures 
 '''
-def LMO_s(si, sj, grad_s, M, eps, mask1, mask2):
-    grad_si_valid = np.where(mask1, grad_s[0], np.inf)
-    grad_sj_valid = np.where(mask2, grad_s[1], np.inf)
+def LMO_s(si, sj, grad_s, M, eps, mu, nu):
 
-    if (grad_si_valid.min() + grad_sj_valid.min()) < -eps:
-        FW_si = int(np.argmin(grad_si_valid))
-        FW_sj = int(np.argmin(grad_sj_valid))
+    if (grad_s[0].min() + grad_s[1].min()) < -eps:
+        FW_si = int(np.argmin(grad_s[0]))
+        FW_sj = int(np.argmin(grad_s[1]))
     else:
         FW_si, FW_sj = -1, -1
     
@@ -318,17 +316,17 @@ def LMO_s(si, sj, grad_s, M, eps, mask1, mask2):
     if not np.any(mask_si) and not np.any(mask_sj):
         return (FW_si, FW_sj, -1, -1)
     else:
-        grad_si_masked = np.where(mask_si & mask1, grad_s[0], -np.inf)
-        grad_sj_masked = np.where(mask_sj & mask2, grad_s[1], -np.inf)
+        grad_si_masked = np.where(mask_si, grad_s[0], -np.inf)
+        grad_sj_masked = np.where(mask_sj, grad_s[1], -np.inf)
 
         max_val_si = grad_si_masked.max()
         max_val_sj = grad_sj_masked.max()
 
         if (max_val_si + max_val_sj) <= eps:
-            if (np.sum(si+sj) < M):
+            if (np.sum(si*mu + sj*nu) < M):
                 return (FW_si, FW_sj, -1, -1)
             else:
-                print("M: ", M, ", sum(si+sj): ", np.sum(si+sj), ". Increase M!")
+                print("M: ", M, ", sum(si*mu + sj*nu): ", np.sum(si*mu + sj*nu), ". Increase M!")
 
         AFW_si = np.argmax(grad_si_masked)
         AFW_sj = np.argmax(grad_sj_masked)
@@ -345,9 +343,10 @@ Parameters:
     s_i, s_j: current truncated supports
     grad_s: gradient with respect to the truncated supports
     vk_s: LMO result for the truncated supports
+    mu, nu: measures
 '''
-def gap_calc_trunc(xk, grad_x, vk_x, M, s_i, s_j, grad_s, vk_s):
-    gap_s = np.dot(s_i, grad_s[0]) + np.dot(s_j, grad_s[1])
+def gap_calc_trunc(xk, grad_x, vk_x, M, s_i, s_j, grad_s, vk_s, mu, nu):
+    gap_s = np.dot(s_i*mu, grad_s[0]) + np.dot(s_j*nu, grad_s[1])
     if vk_s[0] != -1:
         gap_s -= M * (grad_s[0][vk_s[0]] + grad_s[1][vk_s[1]])
     
@@ -495,8 +494,9 @@ Parameters:
     FW_x, AFW_x: vector indices for x search directions
     FW_si, AFW_si, FW_sj, AFW_sj: indices for s search directions
     M: upper bound for generalized simplex
+    mu, nu: measures
 '''
-def compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M):
+def compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M, mu, nu):
     gamma_max = np.inf
     
     # Constraints from x coordinates
@@ -507,13 +507,13 @@ def compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M
     
     # Constraints from s_i
     if FW_si != -1:
-        gamma_max = min(gamma_max, M - np.sum(s_i) + s_i[FW_si])
+        gamma_max = min(gamma_max, M - np.sum(s_i*mu) + s_i[FW_si]*mu[FW_si])
     if AFW_si != -1:
         gamma_max = min(gamma_max, s_i[AFW_si])
     
     # Constraints from s_j
     if FW_sj != -1:
-        gamma_max = min(gamma_max, M - np.sum(s_j) + s_j[FW_sj])
+        gamma_max = min(gamma_max, M - np.sum(s_j*nu) + s_j[FW_sj]*nu[FW_sj])
     if AFW_sj != -1:
         gamma_max = min(gamma_max, s_j[AFW_sj])
     
@@ -622,7 +622,7 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     
     # Compute maximum allowed step size respecting all constraints
-    gamma_max = compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M)
+    gamma_max = compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M, mu, nu)
     
     # Compute step size using Armijo with gamma_max as upper bound
     result = step_calc(x_marg, y_marg, grad_xk_x, grad_xk_s,
@@ -686,10 +686,10 @@ def PW_FW_dim1_trunc(mu, nu, M, p, c, R,
     for k in range(max_iter):
         # LMO call
         vk_x = LMO_x(xk, grad_xk_x, M, eps)
-        vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mask1, mask2)
+        vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)
 
         # gap calculation
-        gap = gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s)
+        gap = gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s, mu, nu)
 
         if (gap <= delta) or (vk_x == (-1, -1) and vk_s == (-1, -1, -1, -1)):
             print("Converged after: ", k, " iterations ")

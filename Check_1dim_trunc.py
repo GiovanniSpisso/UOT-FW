@@ -142,7 +142,7 @@ cost_trunc = fw.truncated_cost(xk, x_marg, y_marg, c, mu, nu, p, s_i, s_j, R)
 print(f"Final UOT cost (truncated): {cost_trunc:.6f}")
 
 # Compute and print final costs
-cost = fw.UOT_cost_upper(cost_trunc, n, s_i, R)
+cost = fw.UOT_cost_upper(cost_trunc, n, s_i, R, mu)
 print(f"Final UOT cost: {cost:.6f}")
 
 # Print additional information

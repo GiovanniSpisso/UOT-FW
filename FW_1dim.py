@@ -56,7 +56,6 @@ Parameters:
 """
 def UOT_cost(pi, x_marg, y_marg, c, mu, nu, p):
   C1 = np.multiply(c, pi).sum()
-  cost_row, cost_col = 0, 0
 
   cost_row = np.sum(mu * Up(x_marg, p))
   cost_col = np.sum(nu * Up(y_marg, p))

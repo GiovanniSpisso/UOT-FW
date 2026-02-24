@@ -511,13 +511,13 @@ def compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M
     if FW_si != -1:
         gamma_max = min(gamma_max, M - np.sum(s_i*mu) + s_i[FW_si]*mu[FW_si])
     if AFW_si != -1:
-        gamma_max = min(gamma_max, s_i[AFW_si])
+        gamma_max = min(gamma_max, s_i[AFW_si]*mu[AFW_si])
     
     # Constraints from s_j
     if FW_sj != -1:
         gamma_max = min(gamma_max, M - np.sum(s_j*nu) + s_j[FW_sj]*nu[FW_sj])
     if AFW_sj != -1:
-        gamma_max = min(gamma_max, s_j[AFW_sj])
+        gamma_max = min(gamma_max, s_j[AFW_sj]*nu[AFW_sj])
     
     return gamma_max
 

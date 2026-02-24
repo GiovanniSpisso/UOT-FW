@@ -373,88 +373,90 @@ Parameters:
     R: truncation radius
     theta, beta, gamma: Armijo parameters
 '''
-def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s, 
-           s_i, s_j, c, p, R, theta = 1.0, beta = 0.4, gamma = 0.5):
-    
+import numpy as np
+
+def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
+           s_i, s_j, c, p, R, theta=1.0, beta=0.4, gamma=0.5):
     i_FW, j_FW, i_AFW, j_AFW = v_coords
     FW_x, AFW_x = vk_x
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     grad_si, grad_sj = grad_s
-    
-    # Directional derivative (inner product): what is the gradient at the FW/AFW directions
-    inner = 0
-    if FW_x != -1:
-        inner += grad_x[FW_x]
-    if AFW_x != -1:
-        inner -= grad_x[AFW_x]
-    if FW_si != -1:
-        inner += grad_si[FW_si]
-    if AFW_si != -1:
-        inner -= grad_si[AFW_si]
-    if FW_sj != -1:
-        inner += grad_sj[FW_sj]
-    if AFW_sj != -1:
-        inner -= grad_sj[AFW_sj]
-    
-    # Objective change: sum of cost and entropy terms
+
+    # Directional derivative <grad, d>
+    inner = 0.0
+    if FW_x != -1:   inner += grad_x[FW_x]
+    if AFW_x != -1:  inner -= grad_x[AFW_x]
+    if FW_si != -1:  inner += grad_si[FW_si]
+    if AFW_si != -1: inner -= grad_si[AFW_si]
+    if FW_sj != -1:  inner += grad_sj[FW_sj]
+    if AFW_sj != -1: inner -= grad_sj[AFW_sj]
+
+    x_updates = {}  # i -> (a_i, mu_i, coeff) where coeff multiplies theta in delta: delta = coeff * theta
+    y_updates = {}  # j -> (b_j, nu_j, coeff)
+
+    def add_x(i, coeff):
+        if i == -1:
+            return
+        a = x_marg[i] + s_i[i]
+        if i in x_updates:
+            a0, mu0, coeff0 = x_updates[i]
+            x_updates[i] = (a0, mu0, coeff0 + coeff)
+        else:
+            x_updates[i] = (a, mu[i], coeff)
+
+    def add_y(j, coeff):
+        if j == -1:
+            return
+        b = y_marg[j] + s_j[j]
+        if j in y_updates:
+            b0, nu0, coeff0 = y_updates[j]
+            y_updates[j] = (b0, nu0, coeff0 + coeff)
+        else:
+            y_updates[j] = (b, nu[j], coeff)
+
+    # Contributions to marginals from x-plan FW/AFW (these affect x_marg at i_* and y_marg at j_*)
+    add_x(i_FW,  +1.0 / mu[i_FW] if i_FW != -1 else 0.0)
+    add_y(j_FW,  +1.0 / nu[j_FW] if j_FW != -1 else 0.0)
+    add_x(i_AFW, -1.0 / mu[i_AFW] if i_AFW != -1 else 0.0)
+    add_y(j_AFW, -1.0 / nu[j_AFW] if j_AFW != -1 else 0.0)
+
+    # Contributions from supports FW/AFW
+    add_x(FW_si,  +1.0 / mu[FW_si] if FW_si != -1 else 0.0)
+    add_x(AFW_si, -1.0 / mu[AFW_si] if AFW_si != -1 else 0.0)
+    add_y(FW_sj,  +1.0 / nu[FW_sj] if FW_sj != -1 else 0.0)
+    add_y(AFW_sj, -1.0 / nu[AFW_sj] if AFW_sj != -1 else 0.0)
+
+    # Constant linear coefficient for cost term
+    cost_lin = 0.0
+    if FW_x != -1:  cost_lin += c[FW_x]
+    if AFW_x != -1: cost_lin -= c[AFW_x]
+
+    # Constant linear coefficient for R penalty
+    penalty_lin = 0.0
+    if FW_sj != -1:  penalty_lin += R
+    if AFW_sj != -1: penalty_lin -= R
+
     def obj_change(theta_val):
-        diff = 0
+        diff = theta_val * (cost_lin + penalty_lin)
 
-        # Cost terms for x
-        if FW_x != -1:
-            diff += theta_val * c[FW_x]
-        if AFW_x != -1:
-            diff -= theta_val * c[AFW_x]
+        # Entropy changes for x marginals
+        for _, (a, mu_i, coeff) in x_updates.items():
+            d = coeff * theta_val
+            diff += (Up(a + d, p) - Up(a, p)) * mu_i
 
-        # Net changes on marginals (avoid double counting when indices overlap)
-        dx_marg = np.zeros_like(x_marg)
-        dy_marg = np.zeros_like(y_marg)
-
-        if i_FW != -1 and mu[i_FW] != 0:
-            dx_marg[i_FW] += theta_val / mu[i_FW]
-        if j_FW != -1 and nu[j_FW] != 0:
-            dy_marg[j_FW] += theta_val / nu[j_FW]
-
-        if i_AFW != -1 and mu[i_AFW] != 0:
-            dx_marg[i_AFW] -= theta_val / mu[i_AFW]
-        if j_AFW != -1 and nu[j_AFW] != 0:
-            dy_marg[j_AFW] -= theta_val / nu[j_AFW]
-
-        if FW_si != -1 and mu[FW_si] != 0:
-            dx_marg[FW_si] += theta_val / mu[FW_si]
-        if AFW_si != -1 and mu[AFW_si] != 0:
-            dx_marg[AFW_si] -= theta_val / mu[AFW_si]
-
-        if FW_sj != -1 and nu[FW_sj] != 0:
-            dy_marg[FW_sj] += theta_val / nu[FW_sj]
-        if AFW_sj != -1 and nu[AFW_sj] != 0:
-            dy_marg[AFW_sj] -= theta_val / nu[AFW_sj]
-
-        # Entropy terms for x_marg, y_marg (apply net changes per index)
-        idx_x = np.nonzero(dx_marg)[0]
-        for i in idx_x:
-            diff += (Up(x_marg[i] + s_i[i] + dx_marg[i], p) - Up(x_marg[i] + s_i[i], p)) * mu[i]
-
-        idx_y = np.nonzero(dy_marg)[0]
-        for j in idx_y:
-            diff += (Up(y_marg[j] + s_j[j] + dy_marg[j], p) - Up(y_marg[j] + s_j[j], p)) * nu[j]
-
-        # R penalty term for s_j 
-        penalty = 0
-        if FW_sj != -1:
-            penalty += 1
-        if AFW_sj != -1:
-            penalty -= 1
-        diff += R * theta_val * penalty
+        # Entropy changes for y marginals
+        for _, (b, nu_j, coeff) in y_updates.items():
+            d = coeff * theta_val
+            diff += (Up(b + d, p) - Up(b, p)) * nu_j
 
         return diff
-    
-    # Armijo line search
+
+    # Backtracking
     diff = obj_change(theta)
     while diff > beta * theta * inner:
         theta *= gamma
         diff = obj_change(theta)
-    
+
     return theta
 
 

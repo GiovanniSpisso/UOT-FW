@@ -296,20 +296,16 @@ Parameters:
     grad_s: tuple of gradients (grad_si, grad_sj)
     M: upper bound for generalized simplex
     eps: tolerance
-    mask1, mask2: masks for valid positions in si and sj
+    mu, nu: measures
 '''
-def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mask1, mask2):
+def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mu, nu):
     grad_si, grad_sj = grad_s
-    
-    # Mask invalid positions (set to inf to exclude from argmin)
-    grad_si_valid = np.where(mask1, grad_si, np.inf)
-    grad_sj_valid = np.where(mask2, grad_sj, np.inf)
 
     # Frank-Wolfe direction (minimize gradient)
-    if (grad_si_valid.min() + grad_sj_valid.min()) < -eps:
+    if (grad_si.min() + grad_sj.min()) < -eps:
         # Find 2D positions of minima
-        FW_si = np.unravel_index(np.argmin(grad_si_valid), grad_si_valid.shape)
-        FW_sj = np.unravel_index(np.argmin(grad_sj_valid), grad_sj_valid.shape)
+        FW_si = np.unravel_index(np.argmin(grad_si), grad_si.shape)
+        FW_sj = np.unravel_index(np.argmin(grad_sj), grad_sj.shape)
     else:
         FW_si, FW_sj = (-1, -1), (-1, -1)
     
@@ -321,17 +317,17 @@ def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mask1, mask2):
         return (FW_si, FW_sj, (-1, -1), (-1, -1))
     
     # Mask: only active entries with valid measure
-    grad_si_masked = np.where(mask_si & mask1, grad_si, -np.inf)
-    grad_sj_masked = np.where(mask_sj & mask2, grad_sj, -np.inf)
+    grad_si_masked = np.where(mask_si, grad_si, -np.inf)
+    grad_sj_masked = np.where(mask_sj, grad_sj, -np.inf)
 
     max_val_si = grad_si_masked.max()
     max_val_sj = grad_sj_masked.max()
 
     if (max_val_si + max_val_sj) <= eps:
-        if (np.sum(si + sj) < M):
+        if (np.sum(si*mu + sj*nu) < M):
             return (FW_si, FW_sj, (-1, -1), (-1, -1))
         else:
-            print(f"M: {M}, sum(si+sj): {np.sum(si+sj):.2f}. Increase M!")
+            print(f"M: {M}, sum(si*mu + sj*nu): {np.sum(si*mu + sj*nu):.2f}. Increase M!")
             return (FW_si, FW_sj, (-1, -1), (-1, -1))
 
     # Find 2D positions of maxima
@@ -351,11 +347,12 @@ Parameters:
   s_i, s_j: current truncated supports
   grad_s: gradient with respect to the truncated supports
   FW_v_s: LMO result for the truncated supports
+  mu, nu: measures
 '''
-def gap_calc_trunc_dim2(x, grad_x, comp_FW, M, s_i, s_j, grad_s, FW_v_s):
+def gap_calc_trunc_dim2(x, grad_x, comp_FW, M, s_i, s_j, grad_s, FW_v_s, mu, nu):
     # ---- gap for supports s_i, s_j ----
     grad_si, grad_sj = grad_s
-    gap_s = np.sum(s_i * grad_si) + np.sum(s_j * grad_sj)
+    gap_s = np.sum(s_i * mu * grad_si) + np.sum(s_j * nu * grad_sj)
 
     FW_si, FW_sj = FW_v_s
     if FW_si != (-1, -1):
@@ -501,8 +498,9 @@ Parameters:
     FW_x / AFW_x: indices for x, compact indices (mat_idx, i, j) or (-1,-1,-1)
     FW_si/AFW_si/FW_sj/AFW_sj: indices for s, (i,j) or -1
     M: upper bound for generalized simplex
+    mu, nu: measures
 '''
-def compute_gamma_max_trunc_dim2(x, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M):
+def compute_gamma_max_trunc_dim2(x, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M, mu, nu):
     gamma_max = np.inf
 
     # constraints from x
@@ -513,15 +511,15 @@ def compute_gamma_max_trunc_dim2(x, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj,
 
     # constraints from s_i
     if FW_si != (-1,-1):
-        gamma_max = min(gamma_max, M - np.sum(s_i) + s_i[FW_si])
+        gamma_max = min(gamma_max, M - np.sum(s_i*mu) + s_i[FW_si]*mu[FW_si])
     if AFW_si != (-1,-1):
-        gamma_max = min(gamma_max, s_i[AFW_si])
+        gamma_max = min(gamma_max, s_i[AFW_si]*mu[AFW_si])
 
     # constraints from s_j
     if FW_sj != (-1,-1):
-        gamma_max = min(gamma_max, M - np.sum(s_j) + s_j[FW_sj])
+        gamma_max = min(gamma_max, M - np.sum(s_j*nu) + s_j[FW_sj]*nu[FW_sj])
     if AFW_sj != (-1,-1):
-        gamma_max = min(gamma_max, s_j[AFW_sj])
+        gamma_max = min(gamma_max, s_j[AFW_sj]*nu[AFW_sj])
 
     return gamma_max
 
@@ -652,7 +650,7 @@ def apply_step_trunc_dim2(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
         FW_x=comp_FW, AFW_x=comp_AFW,
         FW_si=FW_si, AFW_si=AFW_si,
         FW_sj=FW_sj, AFW_sj=AFW_sj,
-        M=M)
+        M=M, mu=mu, nu=nu)
 
     # Armijo step with theta upper bound = gamma_max
     gammak = step_calc_trunc_dim2(
@@ -723,11 +721,11 @@ def PW_FW_dim2_trunc(mu, nu, M, p, R,
         i_FW, i_AFW = LMO_trunc_dim2_x(xk, grad_xk_x, displacement_map, M, eps=eps)
         vk_x = (i_FW, i_AFW)
 
-        FW_si, FW_sj, AFW_si, AFW_sj = LMO_trunc_dim2_s(s_i, s_j, grad_xk_s, M, eps, mask1, mask2)
+        FW_si, FW_sj, AFW_si, AFW_sj = LMO_trunc_dim2_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)
         vk_s = (FW_si, FW_sj, AFW_si, AFW_sj)
 
         # gap
-        gap = gap_calc_trunc_dim2(xk, grad_xk_x, i_FW[0], M, s_i, s_j, grad_xk_s, (FW_si, FW_sj))
+        gap = gap_calc_trunc_dim2(xk, grad_xk_x, i_FW[0], M, s_i, s_j, grad_xk_s, (FW_si, FW_sj), mu, nu)
 
         # stopping
         no_x_dir = (i_FW[0][0] == -1 and i_AFW[0][0] == -1)

@@ -62,7 +62,7 @@ xk, grad_xk, x_marg, y_marg, s_i, s_j = result
 
 cost_trunc = truncated_cost(xk, x_marg, y_marg, c, mu, nu, p, s_i, s_j, R)
 print(f"Final UOT cost (truncated): {cost_trunc:.4f}")
-cost = UOT_cost_upper(cost_trunc, n, s_i, R)
+cost = UOT_cost_upper(cost_trunc, n, s_i, R, mu)
 print(f"Final UOT cost: {cost:.4f}")
 
 

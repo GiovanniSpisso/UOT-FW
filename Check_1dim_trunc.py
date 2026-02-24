@@ -9,7 +9,7 @@ import FW_1dim_trunc as fw
 
 # Parameters
 n = 5  # problem size
-p = 0.1  # entropy parameter
+p = 1  # entropy parameter
 R = 2  # truncation radius
 
 # Tolerance parameters
@@ -114,7 +114,7 @@ for k in range(max_iter):
     print(f"  AFW_si: {AFW_si}, AFW_sj: {AFW_sj}")
 
     # Gap calculation
-    gap = fw.gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s)
+    gap = fw.gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s, mu, nu)
     print(f"\nGap: {gap:.6f}")
 
     if (gap <= delta) or (vk_x == (-1, -1) and vk_s == (-1, -1, -1, -1)):

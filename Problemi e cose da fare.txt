@@ -1,9 +1,8 @@
 Problemi da risolvere e cose da fare
 
 1. 24/02: PROBLEMI 
-          Costo FW_2dim 
-          Costo e tempi FW_2dim_trun per p != 2
-          Costo e tempi FW_1dim_trunc per p != 2
+          implemento vector to matrix (?)
+          Costo e tempi FW_2dim_trunc per p != 2
           vai avanti con appunti su OT ed UOT   
 
 2. Confronti con Sejourne:

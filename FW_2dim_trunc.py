@@ -72,16 +72,17 @@ def truncated_cost_dim2(pi, x_marg, y_marg, c, mu, nu, p, s_i, s_j, R):
 
 
 '''
-Compute the total UOT cost:
+Compute an upper bound for the UOT cost:
 Parameters:
-  pi: transportation plan
-  x_marg, y_marg: X and Y marginals of the transportation plan
-  c: cost function (vector form)
-  mu, nu: measures
+  cost_trunc: truncated UOT cost
+  n: number of samples
+  si: truncated support on X
+  R: truncation radius
+  mu: measure on X
 '''
-def UOT_cost_upper_dim2(cost_trunc, n, si, R):
+def UOT_cost_upper_dim2(cost_trunc, n, si, R, mu):
   K = np.sqrt(2) * (n - 1) - R # Supposing c = np.sqrt(|x1-x2|^2 + |y1-y2|^2)
-  return cost_trunc + K * np.sum(si)
+  return cost_trunc + K * np.sum(si * mu)
 
 
 '''
@@ -732,7 +733,7 @@ def PW_FW_dim2_trunc(mu, nu, M, p, R,
         no_x_dir = (i_FW[0][0] == -1 and i_AFW[0][0] == -1)
         no_s_dir = (FW_si == (-1, -1) and AFW_si == (-1, -1))
         if (gap <= delta) or (no_x_dir and no_s_dir):
-            print("Converged after:", k, "iterations")
+            print("FW_2dim_trunc converged after:", k, "iterations")
             return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j
 
         # step
@@ -744,5 +745,6 @@ def PW_FW_dim2_trunc(mu, nu, M, p, R,
         grad_xk_x, grad_xk_s = update_grad_trunc_dim2(
             x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
             mask1, mask2, c_trunc, displacement_map, p, R, vk_x, vk_s)
-
+    
+    print("FW_2dim_trunc reached max iterations:", max_iter)
     return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

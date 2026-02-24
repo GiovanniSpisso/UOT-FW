@@ -566,7 +566,7 @@ def PW_FW_dim1_p1_5(mu, nu, M,
     gap = gap_calc_p1_5(grad_xk, vk, M, sum_term)
 
     if (gap <= delta) or (vk == (-1, -1)):
-      print("Converged after: ", k, " iterations ")
+      print("FW_1dim_p1_5 converged after: ", k, " iterations ")
       return xk, grad_xk, x_marg, y_marg
 
     # Convert 7n indices to matrix coordinates (done once per iteration)
@@ -600,5 +600,5 @@ def PW_FW_dim1_p1_5(mu, nu, M,
     # Add back contributions from affected entries after gradient update
     sum_term = update_sum_term_p1_5(sum_term, grad_xk, xk, (FW_i, FW_j, AFW_i, AFW_j), n, sign=+1)
 
-  print("Converged after: ", max_iter, " iterations ")
+  print("FW_1dim_p1_5 converged after: ", max_iter, " iterations ")
   return xk, grad_xk, x_marg, y_marg

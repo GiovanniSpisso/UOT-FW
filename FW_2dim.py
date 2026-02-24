@@ -424,7 +424,7 @@ def PW_FW_dim2(mu, nu, M, p, c,
     gap = gap_calc_dim2(grad_xk, vk, M, sum_term)
 
     if (gap <= delta) or (vk == ((-1,-1,-1,-1),(-1,-1,-1,-1))):
-      print("Converged after: ", k, " iterations ")
+      print("FW_2dim converged after: ", k, " iterations ")
       return (xk, grad_xk, x_marg, y_marg)
 
     # coordinates + rows and columns update
@@ -448,5 +448,5 @@ def PW_FW_dim2(mu, nu, M, p, c,
     sum_term = update_sum_term_dim2(sum_term, grad_xk, xk, mask1, mask2,
                                source_coords, target_coords, sign=+1)
 
-  print("Converged after: ", max_iter, " iterations ")
+  print("FW_2dim converged after: ", max_iter, " iterations ")
   return (xk, grad_xk, x_marg, y_marg)

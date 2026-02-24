@@ -74,12 +74,13 @@ def truncated_cost(pi, x_marg, y_marg, c, mu, nu, p, s_i, s_j, R):
 
 
 '''
-Compute the total UOT cost:
+Compute an upper bound for the UOT cost:
 Parameters:
-  pi: transportation plan
-  x_marg, y_marg: X and Y marginals of the transportation plan
-  c: cost function (vector form)
-  mu, nu: measures
+  cost_trunc: truncated UOT cost
+  n: number of samples
+  si: truncated support on X
+  R: truncation radius
+  mu: measure on X
 '''
 def UOT_cost_upper(cost_trunc, n, si, R, mu):
   K = n - 1 - R # Supposing c = |i-j|
@@ -694,7 +695,7 @@ def PW_FW_dim1_trunc(mu, nu, M, p, c, R,
         gap = gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s, mu, nu)
 
         if (gap <= delta) or (vk_x == (-1, -1) and vk_s == (-1, -1, -1, -1)):
-            print("Converged after: ", k, " iterations ")
+            print("FW_1dim_trunc converged after: ", k, " iterations ")
             return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j
         
         # Apply step update
@@ -705,5 +706,6 @@ def PW_FW_dim1_trunc(mu, nu, M, p, c, R,
         # Update gradient
         grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 
                                                  mask1, mask2, p, n, R, v_coords, vk_s)
-
+    
+    print("FW_1dim_trunc converged after: ", max_iter, " iterations ")
     return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

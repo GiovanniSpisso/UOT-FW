@@ -555,7 +555,7 @@ def PW_FW_dim2_p2(mu, nu, M,
     gap = gap_calc_dim2_p2(grad_xk, comp_FW, M, sum_term)
 
     if (gap <= delta) or (full_FW == (-1,-1,-1,-1) and full_AFW == (-1,-1,-1,-1)): 
-      print("Converged after: ", k, " iterations ")
+      print("FW_2dim_p2 converged after: ", k, " iterations ")
       return (xk, grad_xk, x_marg, y_marg)
 
     # Remove contributions from affected coordinates before gradient update
@@ -571,5 +571,5 @@ def PW_FW_dim2_p2(mu, nu, M,
     # Add back contributions from affected coordinates after gradient update
     sum_term = update_sum_term_dim2_p2(sum_term, grad_xk, xk, full_FW, full_AFW, n, sign=1)
 
-  print("Converged after: ", max_iter, " iterations ")
+  print("FW_2dim_p2 converged after: ", max_iter, " iterations ")
   return (xk, grad_xk, x_marg, y_marg)

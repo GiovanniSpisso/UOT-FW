@@ -1,7 +1,8 @@
 Problemi da risolvere e cose da fare
 
-1. Faccio un po di plot vari sul codice unidimensionale
-   esperimenti variando parametri: p, n, R
+1. 24/02: guardare github Fiorucci e confrontare esperimenti se possibile
+          guardare meglio su OTT-JAX cosa c'è
+          vai avanti con appunti su OT ed UOT   
 
 2. Confronti con Sejourne:
     Confronto con codice nel loro paper (fig3): vedere quale è il loro primale
@@ -22,4 +23,3 @@ Idee grafi per esperimenti:
     Cost vs Time (a parità di tutti i parametri, si confrontano codici diversi)
     For 2 dimensional codes: mass transport with some images 
     esperimenti variando parametri: p, n, R (troncata / codice con p = 2, cosa di preciso?)   
-                                           

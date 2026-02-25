@@ -10,15 +10,15 @@ from FW_2dim import PW_FW_dim2, UOT_cost
 np.set_printoptions(precision=3, suppress=True)
 
 np.random.seed(0)
-n = 40
-R = 3
+n = 30
+R = 2
 p = 1
 # Define two positive and discrete measures
 mu = np.random.randint(1, 100, size=(n, n))
 nu = np.random.randint(1, 100, size=(n, n))
 
 M = n * (np.sum(mu) + np.sum(nu))
-delta = 0.001
+delta = 0.01
 eps = 0.001
 max_iter = 10000
 

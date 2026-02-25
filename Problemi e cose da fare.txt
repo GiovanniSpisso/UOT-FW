@@ -1,7 +1,16 @@
 Problemi da risolvere e cose da fare
 
-1. 25/02: risolvi problemi con FW 2dim trunc: probabilmente serve codice che confronti trunc con 
-          FW 2dim intero e vedi cosa cambia!
+1. 25/02:   fai tabella :
+            n = (provo con 100, 500, 1000, 1500...)
+            p = 2,   dim 1: FW_non_sparse | FW_trunc | POT (solve_sample) | FW_p2
+            p = 1.5, dim 1: FW_non_sparse | FW_trunc | POT (solve_sample) | FW_p1.5
+            p = 1,   dim 1: FW_non_sparse | FW_trunc | POT (solve_sample)
+
+            n = (provo con 10, 20, 30, 40...)
+            p = 2,   dim 2: FW_non_sparse | FW_trunc | POT (solve_sample) | FW_p2
+            p = 1.5, dim 2: FW_non_sparse | FW_trunc | POT (solve_sample) | FW_p1.5
+            p = 1,   dim 2: FW_non_sparse | FW_trunc | POT (solve_sample)
+
           vai avanti con appunti su OT ed UOT   
 
 2. Confronti con Sejourne:

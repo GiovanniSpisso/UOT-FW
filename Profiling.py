@@ -12,8 +12,7 @@ from FW_2dim_p2 import PW_FW_dim2_p2
 from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_trunc_dim2
 
 
-def make_data(n, seed=0):
-      np.random.seed(seed)
+def make_data(n):
       # 1D measures: size n
       mu1 = np.random.randint(1, 100, size=n)
       nu1 = np.random.randint(1, 100, size=n)
@@ -58,6 +57,7 @@ if __name__ == '__main__':
       R = int(sys.argv[5]) if len(sys.argv) > 5 else 3  # truncation radius for FW_truncated
       delta = 0.01
       eps = 0.001
+      np.random.seed(0)
 
       # Create 1D data
       mu1, nu1, c, _, _ = make_data(n_1d)

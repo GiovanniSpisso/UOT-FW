@@ -8,20 +8,20 @@ from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, UOT_cost_upper_
 
 
 # Parameters
-n = 30  # problem size
+n = 5  # problem size
 p = 1    # entropy parameter
 R = 3     # truncation radius
 
 # Tolerance parameters
-delta = 0.01
+delta = 0.001
 eps = 0.001
 max_iter = 1000
 
 
 # Generate test data
 np.random.seed(0)
-mu = np.random.randint(1, 1001, size=(n,n)).astype(float)
-nu = np.random.randint(1, 1001, size=(n,n)).astype(float)
+mu = np.random.randint(1, 100, size=(n,n)).astype(float)
+nu = np.random.randint(1, 100, size=(n,n)).astype(float)
 
 # Create truncated cost matrix
 c_trunc, displacement_map = cost_matrix_trunc_dim2(R)

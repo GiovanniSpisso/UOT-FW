@@ -448,5 +448,6 @@ def PW_FW_dim2(mu, nu, M, p, c,
     sum_term = update_sum_term_dim2(sum_term, grad_xk, xk, mask1, mask2,
                                source_coords, target_coords, sign=+1)
 
-  print("FW_2dim converged after: ", max_iter, " iterations ")
+  
+  print("FW_2dim reached max iterations: ", max_iter)
   return (xk, grad_xk, x_marg, y_marg)

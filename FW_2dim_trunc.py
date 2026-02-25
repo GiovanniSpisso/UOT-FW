@@ -385,8 +385,9 @@ Parameters:
     theta, beta, gamma: Armijo parameters
 '''
 def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
-                      s_i, s_j, c_trunc, p, R, theta=1.0, beta=0.4, gamma=0.5):
-    
+                      s_i, s_j, c_trunc, p, R,
+                      theta=1.0, beta=0.4, gamma=0.5):
+
     (comp_FW, full_FW), (comp_AFW, full_AFW) = vk_x
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     grad_si, grad_sj = grad_s
@@ -397,69 +398,88 @@ def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
         inner += grad_x[comp_FW]
     if comp_AFW[0] != -1:
         inner -= grad_x[comp_AFW]
-    if FW_si != (-1,-1):
+    if FW_si != (-1, -1):
         inner += grad_si[FW_si]
-    if AFW_si != (-1,-1):
+    if AFW_si != (-1, -1):
         inner -= grad_si[AFW_si]
-    if FW_sj != (-1,-1):
+    if FW_sj != (-1, -1):
         inner += grad_sj[FW_sj]
-    if AFW_sj != (-1,-1):
+    if AFW_sj != (-1, -1):
         inner -= grad_sj[AFW_sj]
 
-    # Objective change: sum of cost and entropy terms
+    # Linear transport-cost coefficient
+    cost_lin = 0.0
+    if comp_FW[0] != -1:
+        cost_lin += c_trunc[comp_FW[0]]
+    if comp_AFW[0] != -1:
+        cost_lin -= c_trunc[comp_AFW[0]]
+
+    # Linear penalty coefficient (matches your objective change for S_j)
+    penalty_lin = 0.0
+    if FW_sj != (-1, -1):
+        penalty_lin += R
+    if AFW_sj != (-1, -1):
+        penalty_lin -= R
+
+    # Precompute affected marginal entries and coefficients:
+    # For each affected (i,j), net delta is coeff * theta, where coeff is ±1/mu or ±1/nu.
+    dx_updates = {}  # (i,j) -> (a = x_marg+s_i at base, mu_ij, coeff)
+    dy_updates = {}  # (k,l) -> (b = y_marg+s_j at base, nu_kl, coeff)
+
+    def add_dx(key, coeff):
+        i, j = key
+        if i == -1:
+            return
+        a = x_marg[i, j] + s_i[i, j]
+        if key in dx_updates:
+            a0, mu0, coeff0 = dx_updates[key]
+            dx_updates[key] = (a0, mu0, coeff0 + coeff)
+        else:
+            dx_updates[key] = (a, mu[i, j], coeff)
+
+    def add_dy(key, coeff):
+        k, l = key
+        if k == -1:
+            return
+        b = y_marg[k, l] + s_j[k, l]
+        if key in dy_updates:
+            b0, nu0, coeff0 = dy_updates[key]
+            dy_updates[key] = (b0, nu0, coeff0 + coeff)
+        else:
+            dy_updates[key] = (b, nu[k, l], coeff)
+
+    # From plan FW/AFW (full indices)
+    if full_FW[0] != -1:
+        x1, x2, y1, y2 = full_FW
+        add_dx((x1, x2), +1.0 / mu[x1, x2])
+        add_dy((y1, y2), +1.0 / nu[y1, y2])
+
+    if full_AFW[0] != -1:
+        x1, x2, y1, y2 = full_AFW
+        add_dx((x1, x2), -1.0 / mu[x1, x2])
+        add_dy((y1, y2), -1.0 / nu[y1, y2])
+
+    # From supports (normalized)
+    if FW_si != (-1, -1):
+        add_dx(FW_si, +1.0 / mu[FW_si])
+    if AFW_si != (-1, -1):
+        add_dx(AFW_si, -1.0 / mu[AFW_si])
+
+    if FW_sj != (-1, -1):
+        add_dy(FW_sj, +1.0 / nu[FW_sj])
+    if AFW_sj != (-1, -1):
+        add_dy(AFW_sj, -1.0 / nu[AFW_sj])
+
     def obj_change(theta_val):
-        diff = 0.0
+        diff = theta_val * (cost_lin + penalty_lin)
 
-        # Cost terms for x
-        if comp_FW[0] != -1:
-            diff += theta_val * c_trunc[comp_FW[0]]
-        if comp_AFW[0] != -1:
-            diff -= theta_val * c_trunc[comp_AFW[0]]
+        for _, (a, mu_ij, coeff) in dx_updates.items():
+            d = coeff * theta_val
+            diff += (Up(a + d, p) - Up(a, p)) * mu_ij
 
-        # Net changes on marginals (avoid double counting when indices overlap)
-        dx_updates = {}  # (i,j) -> delta to x_marg at that entry
-        dy_updates = {}  # (k,l) -> delta to y_marg at that entry
-
-        def add_update(dct, key, val):
-            if key in dct:
-                dct[key] += val
-            else:
-                dct[key] = val
-
-        # From plan FW/AFW
-        if full_FW[0] != -1:
-            x1, x2, y1, y2 = full_FW
-            add_update(dx_updates, (x1, x2), +theta_val / mu[x1, x2])
-            add_update(dy_updates, (y1, y2), +theta_val / nu[y1, y2])
-
-        if full_AFW[0] != -1:
-            x1, x2, y1, y2 = full_AFW
-            add_update(dx_updates, (x1, x2), -theta_val / mu[x1, x2])
-            add_update(dy_updates, (y1, y2), -theta_val / nu[y1, y2])
-
-        # From supports s_i, s_j
-        if FW_si != (-1,-1):
-            add_update(dx_updates, FW_si, +theta_val / mu[FW_si])
-        if AFW_si != (-1,-1):
-            add_update(dx_updates, AFW_si, -theta_val / mu[AFW_si])
-
-        if FW_sj != (-1,-1):
-            add_update(dy_updates, FW_sj, +theta_val / nu[FW_sj])
-        if AFW_sj != (-1,-1):
-            add_update(dy_updates, AFW_sj, -theta_val / nu[AFW_sj])
-
-        # Entropy terms for x_marg, y_marg (apply net changes per index)
-        for (i, j), d in dx_updates.items():
-            diff += (Up(x_marg[i, j] + s_i[i, j] + d, p) - Up(x_marg[i, j] + s_i[i, j], p)) * mu[i, j]
-
-        for (k, l), d in dy_updates.items():
-            diff += (Up(y_marg[k, l] + s_j[k, l] + d, p) - Up(y_marg[k, l] + s_j[k, l], p)) * nu[k, l]
-
-        # # R penalty term for s_j 
-        if FW_sj != (-1,-1):
-            diff += R * theta_val
-        if AFW_sj != (-1,-1):
-            diff -= R * theta_val
+        for _, (b, nu_kl, coeff) in dy_updates.items():
+            d = coeff * theta_val
+            diff += (Up(b + d, p) - Up(b, p)) * nu_kl
 
         return diff
 

@@ -8,14 +8,14 @@ from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, UOT_cost_upper_
 
 
 # Parameters
-n = 1000  # problem size
+n = 30  # problem size
 p = 1    # entropy parameter
 R = 3     # truncation radius
 
 # Tolerance parameters
 delta = 0.01
 eps = 0.001
-max_iter = 5000
+max_iter = 1000
 
 
 # Generate test data
@@ -57,7 +57,7 @@ xk, grad_xk, x_marg, y_marg, s_i, s_j = result
 
 cost_trunc = truncated_cost_dim2(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R)
 print(f"Final UOT cost (truncated): {cost_trunc:.4f}")
-cost = UOT_cost_upper_dim2(cost_trunc, n, s_i, R)
+cost = UOT_cost_upper_dim2(cost_trunc, n, s_i, R, mu)
 print(f"Final UOT cost: {cost:.4f}")
 
 print(f"% difference: {100 * (cost - cost_trunc) / cost_trunc if cost_trunc != 0 else 0}")

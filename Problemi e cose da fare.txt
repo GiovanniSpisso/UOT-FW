@@ -1,8 +1,7 @@
 Problemi da risolvere e cose da fare
 
-1. 24/02: PROBLEMI 
-          implemento vector to matrix (?)
-          Costo e tempi FW_2dim_trunc per p != 2
+1. 25/02: risolvi problemi con FW 2dim trunc: probabilmente serve codice che confronti trunc con 
+          FW 2dim intero e vedi cosa cambia!
           vai avanti con appunti su OT ed UOT   
 
 2. Confronti con Sejourne:

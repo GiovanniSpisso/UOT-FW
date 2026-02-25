@@ -56,7 +56,7 @@ if __name__ == '__main__':
       max_iter = int(sys.argv[3]) if len(sys.argv) > 3 else 1000
       p_generic = float(sys.argv[4]) if len(sys.argv) > 4 else 2  # p for FW_1dim and FW_2dim
       R = int(sys.argv[5]) if len(sys.argv) > 5 else 3  # truncation radius for FW_truncated
-      delta = 0.001
+      delta = 0.01
       eps = 0.001
 
       # Create 1D data

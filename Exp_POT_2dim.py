@@ -17,8 +17,8 @@ p = 1
 mu = np.random.randint(1, 100, size=(n, n))
 nu = np.random.randint(1, 100, size=(n, n))
 
-M = n * n * (np.sum(mu) + np.sum(nu))
-delta = 0.01
+M = n * (np.sum(mu) + np.sum(nu))
+delta = 0.001
 eps = 0.001
 max_iter = 10000
 

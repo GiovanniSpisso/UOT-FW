@@ -1,10 +1,11 @@
 import numpy as np
 import numpy.ma as ma
-import FW_1dim_p2 as fw_p2
+import FW_1dim_trunc as fw
 
 # Parameters
 n = 5  # problem size
 p = 2  # entropy parameter (p=2)
+R = 2  # truncation radius
 
 # Tolerance parameters
 delta = 0.001
@@ -13,8 +14,8 @@ max_iter = 10
 
 # Generate test data
 np.random.seed(0)
-mu = np.random.randint(0, 5, size=n).astype(float)
-nu = np.random.randint(0, 5, size=n).astype(float)
+mu = np.array([0, 2, 1, 3, 0])
+nu = np.array([1, 0, 1, 0, 1])
 
 mu = np.ma.masked_equal(mu, 0)
 nu = np.ma.masked_equal(nu, 0)
@@ -22,9 +23,10 @@ nu = np.ma.masked_equal(nu, 0)
 # Set M (upper bound for generalized simplex)
 M = n * (np.sum(mu) + np.sum(nu))
 
-print(f"Problem setup:")
+print("Problem setup:")
 print(f"  n = {n}")
 print(f"  p = {p}")
+print(f"  R (truncation radius) = {R}")
 print(f"  M (upper bound) = {M:.2f}")
 print(f"  max_iter = {max_iter}")
 print(f"  delta (convergence tol) = {delta}")
@@ -33,15 +35,8 @@ print(f"  mu = {mu}")
 print(f"  nu = {nu}")
 print()
 
-# Initialize
-xk, x_marg, y_marg, mask_3n = fw_p2.x_init_p2(mu, nu, n)
-print("xk: ", xk)
-print("x_marg: ", x_marg)
-print("y_marg: ", y_marg)
-mat = fw_p2.vec_to_mat_p2(xk, n)
-print("xk as matrix:\n", mat)
-
-grad_xk = fw_p2.grad_p2(x_marg, y_marg, n, mask_3n)
-print("Gradient at xk: ", grad_xk)
-mat = fw_p2.vec_to_mat_p2(grad_xk, n)
-print("xk as matrix:\n", mat)
+xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j = fw.PW_FW_dim1_trunc(mu, nu, M, p, R, 
+                                                                           max_iter = 100, delta = 0.01, eps = 0.001)  
+c, mask = fw.build_c_and_mask(n, R, mu, nu)
+cost_trunc = fw.truncated_cost(xk, x_marg, y_marg, c, mu, nu, p, s_i, s_j, R)
+print(f"Final UOT cost (truncated): {cost_trunc:.6f}")

@@ -87,7 +87,7 @@ if __name__ == '__main__':
             ('FW_1dim', PW_FW_dim1, (mu1, nu1, M1, p_generic, c), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim_p2', PW_FW_dim1_p2, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
             ('FW_1dim_p1_5', PW_FW_dim1_p1_5, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
-            ('FW_truncated', PW_FW_dim1_trunc, (mu1, nu1, M1, p_generic, c_trunc, R), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_1dim_trunc', PW_FW_dim1_trunc, (mu1, nu1, M1, p_generic, R), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
       ]
 
       results = {}
@@ -116,8 +116,8 @@ if __name__ == '__main__':
             print(f"Final cost (FW_1dim_p2): {cost_p2_val:.10f}")
             print(f"Final cost (FW_1dim_p1_5): {cost_p1_5_val:.10f}")
       
-      if results.get('FW_truncated'):
-            xk_trunc, grad_trunc, x_marg_trunc, y_marg_trunc, s_i, s_j = results['FW_truncated']
+      if results.get('FW_1dim_trunc'):
+            xk_trunc, grad_trunc, x_marg_trunc, y_marg_trunc, s_i, s_j = results['FW_1dim_trunc']
             cost_trunc = truncated_cost(xk_trunc, x_marg_trunc, y_marg_trunc, c_trunc, mu1, nu1, p_generic, s_i, s_j, R)
             print(f"Final cost (FW_1dim_trunc): {cost_trunc:.10f}")
       

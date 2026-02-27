@@ -49,6 +49,34 @@ def dUp_dx(x, p):
     
 
 '''
+Compute cost array and mask for truncated support
+Parameters:
+    n: dimension
+    R: truncation radius
+    mu, nu: measures
+'''
+def build_c_and_mask(n, R, mu, nu):
+    mask1 = np.ma.getmaskarray(mu)
+    mask2 = np.ma.getmaskarray(nu)
+
+    c_vec    = []
+    mask_vec = []
+
+    for k in range(-R + 1, R):
+        m = n - abs(k)
+        c_vec.extend([abs(k)] * m)
+
+        if k == 0:
+            mask_vec.extend(mask1[:m] | mask2[:m])
+        elif k > 0:
+            mask_vec.extend(mask1[:m] | mask2[k:k+m])
+        else:  # k < 0
+            mask_vec.extend(mask1[-k:-k+m] | mask2[:m])
+
+    return np.array(c_vec), np.array(mask_vec, dtype=bool)
+
+
+'''
 Compute the truncated UOT cost:
 Parameters:
   pi: transportation plan
@@ -105,7 +133,7 @@ def vector_to_matrix(vec, n, R):
         mask[i, j]   = vec_mask[pos:pos + m]
         pos += m
 
-    return np.ma.array(matrix, mask=mask)
+    return np.ma.array(matrix, mask=np.asarray(mask, dtype=bool))
 
 
 def vector_index_to_matrix_indices(idx, n, R):
@@ -174,56 +202,48 @@ Parameters:
     n: number of samples
     c: cost function
     p: main parameter that defines the p-entropy
+    mask_vec: mask for the truncated cost vector
 '''
-def x_init_trunc(mu, nu, n, c, p):
-    x = np.zeros_like(c, dtype=float)
-    mask_c = (c == 0)         
-    x_marg = np.zeros(n)
-    y_marg = np.zeros(n)
+def x_init_trunc(mu, nu, n, c, p, mask_vec):
+    mask1 = np.ma.getmaskarray(mu)
+    mask2 = np.ma.getmaskarray(nu)
 
-    mask1 = (mu != 0)
-    mask2 = (nu != 0)
-    mask = mask1 & mask2
+    diag = np.zeros(n, dtype=float)
+    if p == 2:
+        diag = 2 * mu * nu / (mu + nu)
+    elif p == 1:
+        diag = np.sqrt(mu * nu)
+    elif p < 1:
+        diag = ((mu**(p-1) + nu**(p-1)) / (2 * (mu**(p-1) * nu**(p-1))))**(1/(1-p))
+    else: # p > 1 
+        diag = ((mu * nu) / (mu**(p-1) + nu**(p-1))**(1/(p-1))) * 2**(1/(p-1))
 
-    # Compute values only where mask is True, otherwise 0
-    diag_values = np.zeros_like(mu, dtype=float)
-    if np.any(mask):
-        if p == 2:
-            diag_values[mask] = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
-        elif p == 1:
-            diag_values[mask] = np.sqrt(mu[mask] * nu[mask])
-        elif p < 1:
-            diag_values[mask] = ((mu[mask]**(p-1) + nu[mask]**(p-1)) / (2 * (mu[mask]**(p-1) * nu[mask]**(p-1))))**(1/(1-p))
-        elif p > 1:  
-            diag_values[mask] = ((mu[mask] * nu[mask]) / (mu[mask]**(p-1) + nu[mask]**(p-1))**(1/(p-1))) * 2**(1/(p-1))
-    
-    x[mask_c] = diag_values
+    # locate main diagonal (k=0) in the vector
+    x_data = np.zeros(len(c), dtype=float)
+    x_data[c == 0] = diag
+    x = np.ma.array(x_data, mask=mask_vec)
 
-    x_diag = x[mask_c]
-    x_marg[mask] = x_diag[mask] / mu[mask]
-    y_marg[mask] = x_diag[mask] / nu[mask]
+    x_marg = np.ma.array(diag.filled(0) / mu, mask=mask1)
+    y_marg = np.ma.array(diag.filled(0) / nu, mask=mask2)
 
-    return x, x_marg, y_marg, mask1, mask2
+    return x, x_marg, y_marg
+
 
 '''
 Function to define the gradient of UOT with respect to the transport plan 
 and to truncated supports S_i, S_j in O(n)
 Parameters:
     x_marg, y_marg: X and Y marginals of the transportation plan
-    mask1, mask2: masks for the gradient
+    mask: mask for the gradient
     c: cost function
     p: main parameter that defines the p-entropy
     n: dimension
     R: truncation radius
 '''
-def grad_trunc(x_marg, y_marg, mask1, mask2, c, p, n, R):
+def grad_trunc(x_marg, y_marg, mask, c, p, n, R):
+    dx = dUp_dx(x_marg, p)
+    dy = dUp_dx(y_marg, p)
     grad_x = np.zeros_like(c, dtype=float)
-    
-    # Compute derivatives only where mask is true to avoid log(0)
-    dx = np.zeros_like(x_marg)
-    dy = np.zeros_like(y_marg)
-    dx[mask1] = dUp_dx(x_marg[mask1], p)
-    dy[mask2] = dUp_dx(y_marg[mask2], p)
     
     pos = 0
     for k in range(-R + 1, R):
@@ -236,14 +256,13 @@ def grad_trunc(x_marg, y_marg, mask1, mask2, c, p, n, R):
             j = np.arange(m)
             i = j - k
 
-        mask = mask1[i] & mask2[j]
-        grad_x[pos:pos + m][mask] = abs(k) + dx[i][mask] + dy[j][mask]
+        grad_x[pos:pos + m] = abs(k) + dx[i] + dy[j]
         pos += m
     
-    grad_si = np.where(mask1, 1/2*R + dx, 0)
-    grad_sj = np.where(mask2, 1/2*R + dy, 0)
+    grad_si = 1/2*R + dx
+    grad_sj = 1/2*R + dy
 
-    return grad_x, (grad_si, grad_sj)
+    return np.ma.array(grad_x, mask=mask), (grad_si, grad_sj)
 
 
 '''
@@ -520,7 +539,6 @@ Parameters:
     si, sj: truncated supports
     grad_x: gradient with respect to plan (vector form)
     grad_s: tuple (grad_si, grad_sj)
-    mask1, mask2: masks for valid indices
     p: entropy parameter
     n: dimension
     R: truncation radius
@@ -528,7 +546,7 @@ Parameters:
     vk_s: LMO result for s (FW_si, FW_sj, AFW_si, AFW_sj) - matrix indices
 '''
 def update_grad_trunc(x_marg, y_marg, si, sj, grad_x, grad_s, 
-                     mask1, mask2, p, n, R, v_coords, vk_s):
+                      p, n, R, v_coords, vk_s):
     i_FW, j_FW, i_AFW, j_AFW = v_coords
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     
@@ -566,7 +584,7 @@ def update_grad_trunc(x_marg, y_marg, si, sj, grad_x, grad_s,
         for k in range(-R + 1, R):
             # Check if column j = i + k is valid
             j = i + k
-            if 0 <= j < n and mask2[j]:
+            if 0 <= j < n:
                 # Find vector index for (i, j)
                 idx = matrix_indices_to_vector_index(i, j, n, R)
                 if idx is not None:
@@ -582,7 +600,7 @@ def update_grad_trunc(x_marg, y_marg, si, sj, grad_x, grad_s,
         for k in range(-R + 1, R):
             # Check if row i = j - k is valid
             i = j - k
-            if 0 <= i < n and mask1[i] and i not in affected_i:  # Skip if already updated
+            if 0 <= i < n and i not in affected_i:  # Skip if already updated
                 # Find vector index for (i, j)
                 idx = matrix_indices_to_vector_index(i, j, n, R)
                 if idx is not None:
@@ -665,15 +683,19 @@ Parameters:
     delta: convergence tolerance
     eps: direction tolerance
 '''
-def PW_FW_dim1_trunc(mu, nu, M, p, c, R,
+def PW_FW_dim1_trunc(mu, nu, M, p, R,
                      max_iter = 100, delta = 0.01, eps = 0.001):
     n = np.shape(mu)[0]
+    # Mask zero entries in mu and nu to deal with measures with zero mass
+    mu = np.ma.masked_equal(mu, 0)
+    nu = np.ma.masked_equal(nu, 0)
+    c, mask = build_c_and_mask(n, R, mu, nu)
 
     # transportation plan, marginals, cost and gradient initialization
-    xk, x_marg, y_marg, mask1, mask2 = x_init_trunc(mu, nu, n, c, p)
+    xk, x_marg, y_marg = x_init_trunc(mu, nu, n, c, p, mask)
 
     s_i, s_j = np.zeros(n), np.zeros(n)
-    grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, mask1, mask2, c, p, n, R)
+    grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, mask, c, p, n, R)
 
     for k in range(max_iter):
         # LMO call
@@ -694,7 +716,7 @@ def PW_FW_dim1_trunc(mu, nu, M, p, c, R,
 
         # Update gradient
         grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 
-                                                 mask1, mask2, p, n, R, v_coords, vk_s)
+                                                 p, n, R, v_coords, vk_s)
     
     print("FW_1dim_trunc converged after: ", max_iter, " iterations ")
     return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

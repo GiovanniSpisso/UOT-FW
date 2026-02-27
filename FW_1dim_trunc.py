@@ -7,7 +7,7 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def Up(x, p):
-    x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
+    x = np.ma.maximum(x, 0)
     
     if p == 1:
         # For x == 0: result = 1 (limit)
@@ -587,7 +587,7 @@ def update_grad_trunc(x_marg, y_marg, si, sj, grad_x, grad_s,
             if 0 <= j < n:
                 # Find vector index for (i, j)
                 idx = matrix_indices_to_vector_index(i, j, n, R)
-                if idx is not None:
+                if (idx is not None) and (not y_marg.mask[j]):
                     dy_j = dUp_dx(y_marg[j] + sj[j], p)
                     grad_x[idx] = abs(k) + dx_i + dy_j
     
@@ -603,7 +603,7 @@ def update_grad_trunc(x_marg, y_marg, si, sj, grad_x, grad_s,
             if 0 <= i < n and i not in affected_i:  # Skip if already updated
                 # Find vector index for (i, j)
                 idx = matrix_indices_to_vector_index(i, j, n, R)
-                if idx is not None:
+                if (idx is not None) and (not x_marg.mask[i]):
                     dx_i = dUp_dx(x_marg[i] + si[i], p)
                     grad_x[idx] = abs(k) + dx_i + dy_j
     

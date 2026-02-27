@@ -70,7 +70,10 @@ Parameters:
   n: sample points
 '''
 def x_init(mu, nu, p, n):
-  x = np.zeros((n, n))
+  mask1 = np.ma.getmaskarray(mu)
+  mask2 = np.ma.getmaskarray(nu)
+  mask = mask1[:, np.newaxis] | mask2[np.newaxis, :]
+  x = np.ma.array(np.zeros((n, n)), mask=mask)
 
   if p == 2:
     diag = 2 * mu * nu / (mu + nu)
@@ -82,8 +85,8 @@ def x_init(mu, nu, p, n):
     diag = ((mu**(p-1) + nu**(p-1)) / (2 * (mu**(p-1) * nu**(p-1))))**(1/(1-p))
   
   np.fill_diagonal(x, diag)
-  x_marg = diag / mu
-  y_marg = diag / nu
+  x_marg = np.ma.array(diag.filled(0) / mu, mask=mask1)
+  y_marg = np.ma.array(diag.filled(0) / nu, mask=mask2)
 
   return x, x_marg, y_marg
 
@@ -276,13 +279,13 @@ Parameters:
 '''
 def update_sum_term(sum_term, grad_xk, xk, rows, cols, sign=1):
   for i in rows:
-    sum_term += sign * np.dot(grad_xk[i, :], xk[i, :])
+    sum_term += sign * np.ma.dot(grad_xk[i, :], xk[i, :])
   for j in cols:
-    sum_term += sign * np.dot(grad_xk[:, j], xk[:, j])
+    sum_term += sign * np.ma.dot(grad_xk[:, j], xk[:, j])
   # Add back intersection (entries subtracted or added twice)
   for i in rows:
       for j in cols:
-          sum_term -= sign * np.dot(grad_xk[i, j], xk[i, j])
+          sum_term -= sign * grad_xk[i, j] * xk[i, j]
 
   return sum_term
 
@@ -337,6 +340,9 @@ Parameters:
 def PW_FW_dim1(mu, nu, M, p, c,
                max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
+  # Mask zero entries in mu and nu to deal with measures with zero mass
+  mu = np.ma.masked_equal(mu, 0)
+  nu = np.ma.masked_equal(nu, 0)
 
   # initial transportation plan, marginals and gradient initialization
   xk, x_marg, y_marg = x_init(mu, nu, p, n)

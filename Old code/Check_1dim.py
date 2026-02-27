@@ -8,19 +8,19 @@ import FW_1dim as fw
 
 
 # Parameters
-n = 5  # problem size
-p = 2  # entropy parameter
+n = 10  # problem size
+p = 1  # entropy parameter
 
 # Tolerance parameters
-delta = 0.001
+delta = 0.01
 eps = 0.001
-max_iter = 5
+max_iter = 100
 
 
 # Generate test data
 np.random.seed(0)
-mu = np.array([1, 2, 1, 3, 1])
-nu = np.array([2, 1, 1, 1, 3])
+mu = np.random.randint(1, 100, size=n)
+nu = np.random.randint(1, 100, size=n)
 
 # Cost function: absolute distance
 c = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
@@ -42,10 +42,6 @@ print()
 # Run the Frank-Wolfe algorithm with detailed iteration output
 print("Running Frank-Wolfe...")
 start_time = time.time()
-
-# mask measures for zero entries
-mu = np.ma.masked_equal(mu, 0)
-nu = np.ma.masked_equal(nu, 0)
 
 # Initialize
 xk, x_marg, y_marg = fw.x_init(mu, nu, p, n)

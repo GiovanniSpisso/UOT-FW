@@ -76,7 +76,16 @@ def vec_to_mat_p1_5(vec, n):
     np.fill_diagonal(matrix[2:, :-2], vec[5*n:6*n-2])   # lower2 (skip vec[6n-2:6n]=0)
     np.fill_diagonal(matrix[3:, :-3], vec[6*n:7*n-3])   # lower3 (skip vec[7n-3:7n]=0)
 
-    return matrix
+    mask = np.ones((n, n), dtype=bool)  # start fully masked
+    np.fill_diagonal(mask, vec.mask[3*n:4*n])
+    np.fill_diagonal(mask[:n-1, 1:], vec.mask[2*n+1:3*n])
+    np.fill_diagonal(mask[:n-2, 2:], vec.mask[n+2:2*n])
+    np.fill_diagonal(mask[:n-3, 3:], vec.mask[3:n])
+    np.fill_diagonal(mask[1:, :-1], vec.mask[4*n:5*n-1])
+    np.fill_diagonal(mask[2:, :-2], vec.mask[5*n:6*n-2])
+    np.fill_diagonal(mask[3:, :-3], vec.mask[6*n:7*n-3])
+
+    return np.ma.array(matrix, mask=mask)
 
 
 def vec_i_to_mat_i_p1_5(idx, n):
@@ -135,15 +144,41 @@ Parameters:
   n: sample points
 '''
 def x_init_p1_5(mu, nu, n):
+  mask1 = np.ma.getmaskarray(mu)
+  mask2 = np.ma.getmaskarray(nu)
+  
+  mask_main = mask1 | mask2         
+  mask_u1 = np.empty(n, dtype=bool)
+  mask_u1[1:] = mask1[:-1] | mask2[1:]  
+  mask_u1[0]  = True
+  mask_u2 = np.empty(n, dtype=bool)
+  mask_u2[2:] = mask1[:-2] | mask2[2:]  
+  mask_u2[:2] = True
+  mask_u3 = np.empty(n, dtype=bool)
+  mask_u3[3:] = mask1[:-3] | mask2[3:]                
+  mask_u3[:3] = True               
+  mask_l1 = np.empty(n, dtype=bool)
+  mask_l1[:-1] = mask1[1:] | mask2[:-1]         
+  mask_l1[-1]  = True                        
+  mask_l2 = np.empty(n, dtype=bool)
+  mask_l2[:-2] = mask1[2:] | mask2[:-2]        
+  mask_l2[-2:] = True                 
+  mask_l3 = np.empty(n, dtype=bool)
+  mask_l3[:-3] = mask1[3:] | mask2[:-3]          
+  mask_l3[-3:] = True   
+  # full 7n mask
+  mask_7n = np.concatenate([mask_u3, mask_u2, mask_u1, mask_main, mask_l1, mask_l2, mask_l3])
+
   # Compute main diagonal values (indices 3n to 4n-1 of the 7n vector)
   diag = ((mu * nu) / (mu**0.5 + nu**0.5)**2) * 4
-  x = np.zeros(7 * n)
-  x[3*n:4*n] = diag
+  x_data = np.zeros(7 * n)
+  x_data[3*n:4*n] = diag.filled(0)
+  x = np.ma.array(x_data, mask=mask_7n)
 
-  x_marg = diag / mu
-  y_marg = diag / nu
+  x_marg = np.ma.array(diag.filled(0) / mu, mask=mask1)
+  y_marg = np.ma.array(diag.filled(0) / nu, mask=mask2)
 
-  return x, x_marg, y_marg
+  return x, x_marg, y_marg, mask_7n
 
 
 '''
@@ -153,7 +188,8 @@ Parameters:
   n: dimension
   mask_7n: masks for the gradient
 '''
-def grad_p1_5(x_marg, y_marg, n):
+def grad_p1_5(x_marg, y_marg, n, mask_7n):
+  # Compute derivatives only where masks are true
   dx = dUp_dx(x_marg, 1.5)
   dy = dUp_dx(y_marg, 1.5)
   
@@ -188,7 +224,7 @@ def grad_p1_5(x_marg, y_marg, n):
   # Cost: c[i+3,i] = 3
   grad[6*n:7*n-3] = 3 + dx[3:] + dy[:-3]
   
-  return grad
+  return np.ma.array(grad, mask=mask_7n)
 
 
 '''
@@ -452,7 +488,9 @@ def update_sum_term_p1_5(sum_term, grad_xk, xk, coords, n, sign):
                 if idx is not None: coord_set.add(idx)
 
     idx_arr = np.fromiter(coord_set, dtype=int)
-    sum_term += sign * np.dot(grad_xk[idx_arr], xk[idx_arr])
+    contributions = grad_xk.data[idx_arr] * xk.data[idx_arr] 
+    valid = ~grad_xk.mask[idx_arr] & ~xk.mask[idx_arr] 
+    sum_term += sign * np.sum(contributions[valid])
 
     return sum_term
 
@@ -505,14 +543,17 @@ Parameters:
 '''
 def PW_FW_dim1_p1_5(mu, nu, M,
                     max_iter = 100, delta = 0.01, eps = 0.001):
+  # Mask zero entries in mu and nu to deal with measures with zero mass
+  mu = np.ma.masked_equal(mu, 0)
+  nu = np.ma.masked_equal(nu, 0)
   n = np.shape(mu)[0]
 
   # initial transportation plan, marginals and gradient initialization
-  xk, x_marg, y_marg = x_init_p1_5(mu, nu, n)
-  grad_xk = grad_p1_5(x_marg, y_marg, n)
+  xk, x_marg, y_marg, mask_7n = x_init_p1_5(mu, nu, n)
+  grad_xk = grad_p1_5(x_marg, y_marg, n, mask_7n)
   
   # Initialize sum_term for efficient gap calculation
-  sum_term = np.dot(grad_xk, xk)
+  sum_term = np.sum(grad_xk * xk)
 
   for k in range(max_iter):
     # search direction (returns 7n vector indices)

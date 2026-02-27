@@ -56,11 +56,16 @@ Constraint: upper_diag[0] = 0, lower_diag[n-1] = 0
 '''
 def vec_to_mat_p2(vec, n):
     matrix = np.zeros((n, n))
-    np.fill_diagonal(matrix, vec[n:2*n])
-    np.fill_diagonal(matrix[:n-1, 1:], vec[1:n])
-    np.fill_diagonal(matrix[1:, :-1], vec[2*n:3*n-1])
+    np.fill_diagonal(matrix, vec[n:2*n].filled(0))
+    np.fill_diagonal(matrix[:n-1, 1:], vec[1:n].filled(0))
+    np.fill_diagonal(matrix[1:, :-1], vec[2*n:3*n-1].filled(0))
 
-    return matrix
+    mask = np.ones((n, n), dtype=bool)  # start fully masked
+    np.fill_diagonal(mask, vec.mask[n:2*n])
+    np.fill_diagonal(mask[:n-1, 1:], vec.mask[1:n])
+    np.fill_diagonal(mask[1:, :-1], vec.mask[2*n:3*n-1])
+
+    return np.ma.array(matrix, mask=mask)
 
 
 def vec_i_to_mat_i_p2(idx, n):
@@ -100,14 +105,31 @@ Parameters:
   n: sample points
 '''
 def x_init_p2(mu, nu, n):
+    mask1 = np.ma.getmaskarray(mu)
+    mask2 = np.ma.getmaskarray(nu) 
+
+    # main diagonal: i -> (i, i)
+    mask_main = mask1 | mask2                          
+    # upper diagonal: i -> (i+1, i)
+    mask_upper = np.empty(n, dtype=bool)
+    mask_upper[1:] = mask1[:-1] | mask2[1:]
+    mask_upper[0]  = True        # x[0] is out of bounds
+    # lower diagonal: i -> (i+1, i)
+    mask_lower = np.empty(n, dtype=bool)
+    mask_lower[:-1]  = mask1[1:] | mask2[:-1]
+    mask_lower[-1]   = True        # x[3n-1] is out of bounds
+    # full 3n mask
+    mask_3n = np.concatenate([mask_upper, mask_main, mask_lower])
+
     diag = 2 * mu * nu / (mu + nu)  
-    x = np.zeros(3 * n)
-    x[n:2*n] = diag
+    x_data = np.zeros(3 * n)
+    x_data[n:2*n] = diag.filled(0)
+    x = np.ma.array(x_data, mask=mask_3n)
 
-    x_marg = diag / mu
-    y_marg = diag / nu
+    x_marg = np.ma.array(diag.filled(0) / mu, mask=mask1)
+    y_marg = np.ma.array(diag.filled(0) / nu, mask=mask2)
 
-    return x, x_marg, y_marg
+    return x, x_marg, y_marg, mask_3n
 
 
 '''
@@ -115,9 +137,10 @@ Function to define the gradient of UOT (for p=2)
 Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
   n: sample points
+  mask_3n mask for the gradient
 '''
-def grad_p2(x_marg, y_marg, n):
-  # Compute derivatives
+def grad_p2(x_marg, y_marg, n, mask_3n):
+  # Compute derivatives only where masks are true
   dx = dUp_dx(x_marg, 2)
   dy = dUp_dx(y_marg, 2)
   
@@ -136,7 +159,7 @@ def grad_p2(x_marg, y_marg, n):
   # Cost: c[i,i-1] = 1
   grad[2*n:3*n-1] = 1 + dx[1:] + dy[:-1]
   
-  return grad
+  return np.ma.array(grad, mask=mask_3n)
 
 
 '''
@@ -350,7 +373,9 @@ def update_sum_term_p2(sum_term, grad_xk, xk, vk, n, sign):
           else: coord_set.update([2*n-1, 3*n-2])
 
     idx_arr = np.fromiter(coord_set, dtype=int)
-    sum_term += sign * np.dot(grad_xk[idx_arr], xk[idx_arr])
+    contributions = grad_xk.data[idx_arr] * xk.data[idx_arr] 
+    valid = ~grad_xk.mask[idx_arr] & ~xk.mask[idx_arr] 
+    sum_term += sign * np.sum(contributions[valid])
 
     return sum_term
 
@@ -401,13 +426,16 @@ Parameters:
 def PW_FW_dim1_p2(mu, nu, M,
                   max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
+  # Mask zero entries in mu and nu to deal with measures with zero mass
+  mu = np.ma.masked_equal(mu, 0)
+  nu = np.ma.masked_equal(nu, 0)
 
   # transportation plan, marginals and gradient initialization
-  xk, x_marg, y_marg = x_init_p2(mu, nu, n)
-  grad_xk = grad_p2(x_marg, y_marg, n)
+  xk, x_marg, y_marg, mask_3n = x_init_p2(mu, nu, n)
+  grad_xk = grad_p2(x_marg, y_marg, n, mask_3n)
   
   # Initialize sum_term for efficient gap calculation
-  sum_term = np.dot(grad_xk, xk)
+  sum_term = np.sum(grad_xk * xk)
 
   for k in range(max_iter):
     # search direction (returns 3n vector indices)

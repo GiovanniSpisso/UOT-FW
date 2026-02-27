@@ -7,7 +7,7 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def Up(x, p):
-    x = np.maximum(x, 0)
+    x = np.ma.maximum(x, 0)
     
     if p == 1:
         # For x == 0: result = 1 (limit)
@@ -49,13 +49,31 @@ def dUp_dx(x, p):
     
 
 '''
-Compute cost array
+Compute cost array and mask for truncated support
 Parameters:
     n: dimension
     R: truncation radius
+    mu, nu: measures
 '''
-def build_c(n, R):
-    return np.concatenate([np.full(n - abs(k), abs(k)) for k in range(-R + 1, R)])
+def build_c_and_mask(n, R, mu, nu):
+    mask1 = np.ma.getmaskarray(mu)
+    mask2 = np.ma.getmaskarray(nu)
+
+    c_vec    = []
+    mask_vec = []
+
+    for k in range(-R + 1, R):
+        m = n - abs(k)
+        c_vec.extend([abs(k)] * m)
+
+        if k == 0:
+            mask_vec.extend(mask1[:m] | mask2[:m])
+        elif k > 0:
+            mask_vec.extend(mask1[:m] | mask2[k:k+m])
+        else:  # k < 0
+            mask_vec.extend(mask1[-k:-k+m] | mask2[:m])
+
+    return np.array(c_vec), np.array(mask_vec, dtype=bool)
 
 
 '''
@@ -96,7 +114,9 @@ def UOT_cost_upper(cost_trunc, n, si, R, mu):
 
 
 def vector_to_matrix(vec, n, R):
+    vec_mask = np.ma.getmaskarray(vec)  # always an array
     matrix = np.zeros((n, n))
+    mask = np.ones((n, n), dtype=bool)
     pos = 0
 
     for k in range(-R + 1, R):
@@ -109,10 +129,11 @@ def vector_to_matrix(vec, n, R):
             j = np.arange(m)
             i = j - k
 
-        matrix[i, j] = vec[pos:pos + m]
+        matrix[i, j] = vec.data[pos:pos + m]
+        mask[i, j]   = vec_mask[pos:pos + m]
         pos += m
 
-    return matrix
+    return np.ma.array(matrix, mask=np.asarray(mask, dtype=bool))
 
 
 def vector_index_to_matrix_indices(idx, n, R):
@@ -181,8 +202,12 @@ Parameters:
     n: number of samples
     c: cost function
     p: main parameter that defines the p-entropy
+    mask_vec: mask for the truncated cost vector
 '''
-def x_init_trunc(mu, nu, n, c, p):
+def x_init_trunc(mu, nu, n, c, p, mask_vec):
+    mask1 = np.ma.getmaskarray(mu)
+    mask2 = np.ma.getmaskarray(nu)
+
     diag = np.zeros(n, dtype=float)
     if p == 2:
         diag = 2 * mu * nu / (mu + nu)
@@ -194,10 +219,12 @@ def x_init_trunc(mu, nu, n, c, p):
         diag = ((mu * nu) / (mu**(p-1) + nu**(p-1))**(1/(p-1))) * 2**(1/(p-1))
 
     # locate main diagonal (k=0) in the vector
-    x = np.zeros(len(c), dtype=float)
-    x[c == 0] = diag
-    x_marg = diag / mu
-    y_marg = diag / nu
+    x_data = np.zeros(len(c), dtype=float)
+    x_data[c == 0] = diag
+    x = np.ma.array(x_data, mask=mask_vec)
+
+    x_marg = np.ma.array(diag.filled(0) / mu, mask=mask1)
+    y_marg = np.ma.array(diag.filled(0) / nu, mask=mask2)
 
     return x, x_marg, y_marg
 
@@ -207,12 +234,13 @@ Function to define the gradient of UOT with respect to the transport plan
 and to truncated supports S_i, S_j in O(n)
 Parameters:
     x_marg, y_marg: X and Y marginals of the transportation plan
+    mask: mask for the gradient
     c: cost function
     p: main parameter that defines the p-entropy
     n: dimension
     R: truncation radius
 '''
-def grad_trunc(x_marg, y_marg, c, p, n, R):
+def grad_trunc(x_marg, y_marg, mask, c, p, n, R):
     dx = dUp_dx(x_marg, p)
     dy = dUp_dx(y_marg, p)
     grad_x = np.zeros_like(c, dtype=float)
@@ -234,7 +262,7 @@ def grad_trunc(x_marg, y_marg, c, p, n, R):
     grad_si = 1/2*R + dx
     grad_sj = 1/2*R + dy
 
-    return grad_x, (grad_si, grad_sj)
+    return np.ma.array(grad_x, mask=mask), (grad_si, grad_sj)
 
 
 '''
@@ -557,7 +585,7 @@ def update_grad_trunc(x_marg, y_marg, si, sj, grad_x, grad_s,
             if 0 <= j < n:
                 # Find vector index for (i, j)
                 idx = matrix_indices_to_vector_index(i, j, n, R)
-                if idx is not None:
+                if (idx is not None) and (not y_marg.mask[j]):
                     dy_j = dUp_dx(y_marg[j] + sj[j], p)
                     grad_x[idx] = abs(k) + dx_i + dy_j
     
@@ -573,7 +601,7 @@ def update_grad_trunc(x_marg, y_marg, si, sj, grad_x, grad_s,
             if 0 <= i < n and i not in affected_i:  # Skip if already updated
                 # Find vector index for (i, j)
                 idx = matrix_indices_to_vector_index(i, j, n, R)
-                if idx is not None:
+                if (idx is not None) and (not x_marg.mask[i]):
                     dx_i = dUp_dx(x_marg[i] + si[i], p)
                     grad_x[idx] = abs(k) + dx_i + dy_j
     
@@ -603,8 +631,6 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
     
     # Compute maximum allowed step size respecting all constraints
     gamma_max = compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M, mu, nu)
-
-    print(gamma_max)
     
     # Compute step size using Armijo with gamma_max as upper bound
     result = step_calc(x_marg, y_marg, grad_xk_x, grad_xk_s,
@@ -658,27 +684,24 @@ Parameters:
 def PW_FW_dim1_trunc(mu, nu, M, p, R,
                      max_iter = 100, delta = 0.01, eps = 0.001):
     n = np.shape(mu)[0]
-    c = build_c(n, R)
+    # Mask zero entries in mu and nu to deal with measures with zero mass
+    mu = np.ma.masked_equal(mu, 0)
+    nu = np.ma.masked_equal(nu, 0)
+    c, mask = build_c_and_mask(n, R, mu, nu)
 
     # transportation plan, marginals, cost and gradient initialization
-    xk, x_marg, y_marg = x_init_trunc(mu, nu, n, c, p)
+    xk, x_marg, y_marg = x_init_trunc(mu, nu, n, c, p, mask)
 
     s_i, s_j = np.zeros(n), np.zeros(n)
-    grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, c, p, n, R)
+    grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, mask, c, p, n, R)
 
     for k in range(max_iter):
-        print(k)
         # LMO call
         vk_x = LMO_x(xk, grad_xk_x, M, eps)
         vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)
 
-        print("vk_x: ", vk_x)
-        print("vk_s: ", vk_s)
-
         # gap calculation
         gap = gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s, mu, nu)
-        
-        print(gap)
 
         if (gap <= delta) or (vk_x == (-1, -1) and vk_s == (-1, -1, -1, -1)):
             print("FW_1dim_trunc converged after: ", k, " iterations ")
@@ -692,9 +715,6 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
         # Update gradient
         grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 
                                                  p, n, R, v_coords, vk_s)
-        
-        print("grad_xk_x: ", grad_xk_x)
-        print("grad_xk_s: ", grad_xk_s)
     
     print("FW_1dim_trunc converged after: ", max_iter, " iterations ")
     return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

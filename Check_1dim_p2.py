@@ -8,7 +8,7 @@ import FW_1dim_p2 as fw_p2
 
 
 # Parameters
-n = 10  # problem size
+n = 5  # problem size
 p = 2  # entropy parameter (p=2)
 
 # Tolerance parameters
@@ -19,8 +19,8 @@ max_iter = 10
 
 # Generate test data
 np.random.seed(0)
-mu = np.random.randint(0, 10, size=n).astype(float)
-nu = np.random.randint(0, 10, size=n).astype(float)
+mu = np.random.randint(1, 5, size=n).astype(float)
+nu = np.random.randint(1, 5, size=n).astype(float)
 
 # Set M (upper bound for generalized simplex)
 M = n * (np.sum(mu) + np.sum(nu))
@@ -36,13 +36,16 @@ print(f"  mu = {mu}")
 print(f"  nu = {nu}")
 print()
 
+mu = np.ma.masked_equal(mu, 0)
+nu = np.ma.masked_equal(nu, 0)
+
 # Run the Frank-Wolfe algorithm with detailed iteration output
 print("Running Frank-Wolfe with p=2...")
 start_time = time.time()
 
 # Initialize
-xk, x_marg, y_marg, mask1, mask2 = fw_p2.x_init_p2(mu, nu, n)
-grad_xk = fw_p2.grad_p2(x_marg, y_marg, mask1, mask2, n)
+xk, x_marg, y_marg, mask_3n = fw_p2.x_init_p2(mu, nu, n)
+grad_xk = fw_p2.grad_p2(x_marg, y_marg, n, mask_3n)
 
 # Initialize sum_term for efficient gap calculation
 sum_term = np.sum(grad_xk * xk)
@@ -146,7 +149,7 @@ for k in range(max_iter):
     print(f"\nStepsize (gamma): {gammak:.6f}")
     
     # Gradient update
-    grad_xk = fw_p2.update_grad_p2(x_marg, y_marg, grad_xk, mask1, mask2,
+    grad_xk = fw_p2.update_grad_p2(x_marg, y_marg, grad_xk,
                                      coords=(FW_i, FW_j, AFW_i, AFW_j))
     
     # Add back contributions after gradient update

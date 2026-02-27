@@ -9,18 +9,18 @@ import FW_1dim as fw
 
 # Parameters
 n = 5  # problem size
-p = 1.1  # entropy parameter
+p = 2  # entropy parameter
 
 # Tolerance parameters
 delta = 0.001
 eps = 0.001
-max_iter = 3
+max_iter = 5
 
 
 # Generate test data
 np.random.seed(0)
-mu = np.random.randint(0, 10, size=n).astype(float)
-nu = np.random.randint(0, 10, size=n).astype(float)
+mu = np.array([1, 2, 1, 3, 1])
+nu = np.array([2, 1, 1, 1, 3])
 
 # Cost function: absolute distance
 c = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
@@ -43,9 +43,13 @@ print()
 print("Running Frank-Wolfe...")
 start_time = time.time()
 
+# mask measures for zero entries
+mu = np.ma.masked_equal(mu, 0)
+nu = np.ma.masked_equal(nu, 0)
+
 # Initialize
-xk, x_marg, y_marg, mask1, mask2 = fw.x_init(mu, nu, p, n)
-grad_xk = fw.grad(x_marg, y_marg, mask1, mask2, p, c)
+xk, x_marg, y_marg = fw.x_init(mu, nu, p, n)
+grad_xk = fw.grad(x_marg, y_marg, p, c)
 
 # Initialize sum_term for efficient gap calculation
 sum_term = np.sum(grad_xk * xk)
@@ -97,7 +101,7 @@ for k in range(max_iter):
     rows, cols = list(rows), list(cols)
 
     # Remove contributions before gradient update
-    sum_term = fw.update_sum_term(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=-1)
+    sum_term = fw.update_sum_term(sum_term, grad_xk, xk, rows, cols, sign=-1)
 
     # Calculate stepsize BEFORE applying the step (using CURRENT state)
     if AFW_i != -1:
@@ -122,10 +126,10 @@ for k in range(max_iter):
     print(f"\nStepsize (gamma): {gammak:.6f}")
 
     # Gradient update
-    grad_xk = fw.update_grad(x_marg, y_marg, grad_xk, mask1, mask2, c, vk, p)
+    grad_xk = fw.update_grad(x_marg, y_marg, grad_xk, c, vk, p)
 
     # Add back contributions after gradient update
-    sum_term = fw.update_sum_term(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=+1)
+    sum_term = fw.update_sum_term(sum_term, grad_xk, xk, rows, cols, sign=+1)
     print(f"Sum term: {sum_term:.6f}")
     print(f"Real sum term: {np.sum(grad_xk * xk):.6f}")
 

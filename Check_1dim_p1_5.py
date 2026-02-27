@@ -36,13 +36,17 @@ print(f"  mu = {mu}")
 print(f"  nu = {nu}")
 print()
 
+# Mask zero entries in mu and nu to deal with measures with zero mass
+mu = np.ma.masked_equal(mu, 0)
+nu = np.ma.masked_equal(nu, 0)
+
 # Run the Frank-Wolfe algorithm with detailed iteration output
 print("Running Frank-Wolfe with p=1.5...")
 start_time = time.time()
 
 # Initialize
-xk, x_marg, y_marg, mask1, mask2 = fw_p1_5.x_init_p1_5(mu, nu, n)
-grad_xk = fw_p1_5.grad_p1_5(x_marg, y_marg, mask1, mask2, n)
+xk, x_marg, y_marg, mask_7n = fw_p1_5.x_init_p1_5(mu, nu, n)
+grad_xk = fw_p1_5.grad_p1_5(x_marg, y_marg, n, mask_7n)
 
 # Initialize sum_term for efficient gap calculation
 sum_term = np.sum(grad_xk * xk)
@@ -142,8 +146,7 @@ for k in range(max_iter):
     print(f"Stepsize (gamma): {gammak:.6f}")
     
     # Gradient update
-    grad_xk = fw_p1_5.update_grad_p1_5(x_marg, y_marg, grad_xk, mask1, mask2,
-                                         coords=(FW_i, FW_j, AFW_i, AFW_j))
+    grad_xk = fw_p1_5.update_grad_p1_5(x_marg, y_marg, grad_xk, coords=(FW_i, FW_j, AFW_i, AFW_j))
     
     # Add back contributions after gradient update
     sum_term = fw_p1_5.update_sum_term_p1_5(sum_term, grad_xk, xk, (FW_i, FW_j, AFW_i, AFW_j), n, sign=+1)

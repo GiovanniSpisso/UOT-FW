@@ -10,7 +10,7 @@ from FW_2dim import PW_FW_dim2, UOT_cost
 np.set_printoptions(precision=3, suppress=True)
 
 np.random.seed(0)
-n = 30
+n = 10
 R = 2
 p = 1
 # Define two positive and discrete measures

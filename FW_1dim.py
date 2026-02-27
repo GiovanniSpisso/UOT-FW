@@ -7,7 +7,6 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def Up(x, p):
-    x = np.asarray(x)
     x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
     
     if p == 1:
@@ -32,7 +31,6 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def dUp_dx(x, p):
-    x = np.asarray(x)
     x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
     
     # For x == 0: return 0 (limit of derivative)
@@ -72,50 +70,40 @@ Parameters:
   n: sample points
 '''
 def x_init(mu, nu, p, n):
-  x = np.zeros((n,n))
-  x_marg = np.zeros(n)
-  y_marg = np.zeros(n)
-
-  mask1 = (mu != 0)
-  mask2 = (nu != 0)
-  mask = mask1 & mask2
+  mask1 = np.ma.getmaskarray(mu)
+  mask2 = np.ma.getmaskarray(nu)
+  mask = mask1[:, np.newaxis] | mask2[np.newaxis, :]
+  x = np.ma.array(np.zeros((n, n)), mask=mask)
 
   if p == 2:
-    x[mask, mask] = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
-  elif p == 1:
-    x[mask, mask] = np.sqrt(mu[mask] * nu[mask])
-  elif p < 1:
-    x[mask, mask] = ((mu[mask]**(p-1) + nu[mask]**(p-1)) / (2 * (mu[mask]**(p-1) * nu[mask]**(p-1))))**(1/(1-p))
+    diag = 2 * mu * nu / (mu + nu)
   elif p > 1:  
-    x[mask, mask] = ((mu[mask] * nu[mask]) / (mu[mask]**(p-1) + nu[mask]**(p-1))**(1/(p-1))) * 2**(1/(p-1))
+    diag = ((mu * nu) / (mu**(p-1) + nu**(p-1))**(1/(p-1))) * 2**(1/(p-1))
+  elif p == 1:
+    diag = np.sqrt(mu * nu)
+  else: # p < 1
+    diag = ((mu**(p-1) + nu**(p-1)) / (2 * (mu**(p-1) * nu**(p-1))))**(1/(1-p))
+  
+  np.fill_diagonal(x, diag)
+  x_marg = np.ma.array(diag.filled(0) / mu, mask=mask1)
+  y_marg = np.ma.array(diag.filled(0) / nu, mask=mask2)
 
-  x_marg[mask] = x[mask,mask] / mu[mask]
-  y_marg[mask] = x[mask,mask] / nu[mask]
-
-  return x, x_marg, y_marg, mask1, mask2
+  return x, x_marg, y_marg
 
 
 '''
 Function to define the gradient of UOT
 Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
-  mask1, mask2: masks for the gradient
   p: main parameter that defines the p-entropy
   c: cost function
 '''
-def grad(x_marg, y_marg, mask1, mask2, p, c):
+def grad(x_marg, y_marg, p, c):
   dx = dUp_dx(x_marg, p)  # shape n
   dy = dUp_dx(y_marg, p)  # shape n
 
   # Add separable gradient terms
   grad_UOT = c + dx[:, None] + dy[None, :]
-
-  # Apply masks
-  mask_i = mask1[:, None]   # broadcast mask1 over i
-  mask_j = mask2[None, :]   # broadcast mask2 over j
-  mask = mask_i & mask_j
-
-  grad_UOT *= mask  # zero out entries where mask is False
 
   return grad_UOT
 
@@ -264,19 +252,18 @@ Function to update the gradient of UOT
 Parameters:
   x_marg, y_marg  : X and Y marginals of the transportation plan
   grad_UOT        : gradient of UOT
-  mask1, mask2    : masks for the gradient
   c               : cost function
   v               : indices of the search direction
   p               : main parameter that defines the p-entropy
 '''
-def update_grad(x_marg, y_marg, grad_UOT, mask1, mask2, c, v, p):
+def update_grad(x_marg, y_marg, grad_UOT, c, v, p):
     FW_i, FW_j, AFW_i, AFW_j = v
     if FW_i != -1:
-        grad_UOT[FW_i, mask2] = (c[FW_i, mask2] + dUp_dx(y_marg[mask2], p) + dUp_dx(x_marg[FW_i], p))
-        grad_UOT[mask1, FW_j] = (c[mask1, FW_j] + dUp_dx(y_marg[FW_j], p) + dUp_dx(x_marg[mask1], p))
+        grad_UOT[FW_i, :] = (c[FW_i, :] + dUp_dx(y_marg, p) + dUp_dx(x_marg[FW_i], p))
+        grad_UOT[:, FW_j] = (c[:, FW_j] + dUp_dx(y_marg[FW_j], p) + dUp_dx(x_marg, p))
     if AFW_i != -1:
-        grad_UOT[AFW_i, mask2] = (c[AFW_i, mask2] + dUp_dx(y_marg[mask2], p) + dUp_dx(x_marg[AFW_i], p))
-        grad_UOT[mask1, AFW_j] = (c[mask1, AFW_j] + dUp_dx(y_marg[AFW_j], p) + dUp_dx(x_marg[mask1], p))
+        grad_UOT[AFW_i, :] = (c[AFW_i, :] + dUp_dx(y_marg, p) + dUp_dx(x_marg[AFW_i], p))
+        grad_UOT[:, AFW_j] = (c[:, AFW_j] + dUp_dx(y_marg[AFW_j], p) + dUp_dx(x_marg, p))
     
     return grad_UOT
 
@@ -287,15 +274,14 @@ Parameters:
   sum_term: current sum term
   grad_xk: gradient vector
   xk: current transportation plan vector
-  mask1, mask2: masks for non-zero measures
   rows, cols: affected rows and columns (as sets/lists of indices)
   sign: +1 to add contributions, -1 to subtract contributions
 '''
-def update_sum_term(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=1):
+def update_sum_term(sum_term, grad_xk, xk, rows, cols, sign=1):
   for i in rows:
-    sum_term += sign * np.dot(grad_xk[i, mask2], xk[i, mask2])
+    sum_term += sign * np.ma.dot(grad_xk[i, :], xk[i, :])
   for j in cols:
-    sum_term += sign * np.dot(grad_xk[mask1, j], xk[mask1, j])
+    sum_term += sign * np.ma.dot(grad_xk[:, j], xk[:, j])
   # Add back intersection (entries subtracted or added twice)
   for i in rows:
       for j in cols:
@@ -354,10 +340,13 @@ Parameters:
 def PW_FW_dim1(mu, nu, M, p, c,
                max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
+  # Mask zero entries in mu and nu to deal with measures with zero mass
+  mu = np.ma.masked_equal(mu, 0)
+  nu = np.ma.masked_equal(nu, 0)
 
   # initial transportation plan, marginals and gradient initialization
-  xk, x_marg, y_marg, mask1, mask2 = x_init(mu, nu, p, n)
-  grad_xk = grad(x_marg, y_marg, mask1, mask2, p, c)
+  xk, x_marg, y_marg = x_init(mu, nu, p, n)
+  grad_xk = grad(x_marg, y_marg, p, c)
   
   # Initialize sum_term for efficient gap calculation
   sum_term = np.sum(grad_xk * xk)
@@ -380,16 +369,16 @@ def PW_FW_dim1(mu, nu, M, p, c,
     rows, cols = set([FW_i, AFW_i]) - {-1}, set([FW_j, AFW_j]) - {-1}
 
     # Remove contributions from affected rows/columns before gradient update
-    sum_term = update_sum_term(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=-1)
+    sum_term = update_sum_term(sum_term, grad_xk, xk, rows, cols, sign=-1)
     
     # Apply step update
     xk, x_marg, y_marg = apply_step(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, c, p)
 
     # gradient update
-    grad_xk = update_grad(x_marg, y_marg, grad_xk, mask1, mask2, c, vk, p)
+    grad_xk = update_grad(x_marg, y_marg, grad_xk, c, vk, p)
     
     # Add back contributions from affected rows/columns after gradient update
-    sum_term = update_sum_term(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=+1)
+    sum_term = update_sum_term(sum_term, grad_xk, xk, rows, cols, sign=+1)
 
   print("FW_1dim converged after: ", max_iter, " iterations ")
   return xk, grad_xk, x_marg, y_marg

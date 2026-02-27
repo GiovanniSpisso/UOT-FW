@@ -7,20 +7,9 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def Up(x, p):
-    x = np.asarray(x)
     x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
     
-    if p == 1:
-        # For x == 0: result = 1 (limit)
-        result = np.ones_like(x, dtype=float)
-        mask_nonzero = (x > 0)
-        result[mask_nonzero] = x[mask_nonzero] * np.log(x[mask_nonzero]) - x[mask_nonzero] + 1
-    elif p == 0:
-        result = np.ones_like(x, dtype=float)
-        mask_nonzero = (x > 0)
-        result[mask_nonzero] = x[mask_nonzero] - 1 - np.log(x[mask_nonzero])
-    else:
-        result = (x**p - p * (x - 1) - 1) / (p * (p - 1))
+    result = (x**p - p * (x - 1) - 1) / (p * (p - 1))
     
     return result
 
@@ -32,16 +21,9 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def dUp_dx(x, p):
-    x = np.asarray(x)
     x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
     
-    # For x == 0: return 0 (limit of derivative)
-    if p == 1:
-        result = np.zeros_like(x, dtype=float)
-        mask_nonzero = (x > 0)
-        result[mask_nonzero] = np.log(x[mask_nonzero])
-    else:
-        result = (x**(p - 1) - 1) / (p - 1)
+    result = (x**(p - 1) - 1) / (p - 1)
     
     return result
 
@@ -59,11 +41,9 @@ def cost_p2(pi, x_marg, y_marg, mu, nu):
   n = x_marg.shape[0]
   C1 = np.sum(pi[:n]) + np.sum(pi[2*n:3*n])
 
-  mask_x = (mu != 0)
-  mask_y = (nu != 0)
   # Compute entropy only on non-zero measure indices
-  cost_row = np.sum(mu[mask_x] * Up(x_marg[mask_x], 2))
-  cost_col = np.sum(nu[mask_y] * Up(y_marg[mask_y], 2))
+  cost_row = np.sum(mu * Up(x_marg, 2))
+  cost_col = np.sum(nu * Up(y_marg, 2))
 
   C2 = cost_row + cost_col
   return C1 + C2
@@ -75,22 +55,17 @@ Vector layout: [upper_diag (n) | main_diag (n) | lower_diag (n)]
 Constraint: upper_diag[0] = 0, lower_diag[n-1] = 0
 '''
 def vec_to_mat_p2(vec, n):
-    '''
-    Convert 3n vector to full n x n matrix.
-    vec[0:n] = upper diagonal, vec[n:2n] = main diagonal, vec[2n:3n] = lower diagonal
-    '''
     matrix = np.zeros((n, n))
-    
-    # Main diagonal
-    np.fill_diagonal(matrix, vec[n:2*n])
-    
-    # Upper diagonal
-    np.fill_diagonal(matrix[:n-1, 1:], vec[1:n])
-    
-    # Lower diagonal
-    np.fill_diagonal(matrix[1:, :-1], vec[2*n:3*n-1])
-    
-    return matrix
+    np.fill_diagonal(matrix, vec[n:2*n].filled(0))
+    np.fill_diagonal(matrix[:n-1, 1:], vec[1:n].filled(0))
+    np.fill_diagonal(matrix[1:, :-1], vec[2*n:3*n-1].filled(0))
+
+    mask = np.ones((n, n), dtype=bool)  # start fully masked
+    np.fill_diagonal(mask, vec.mask[n:2*n])
+    np.fill_diagonal(mask[:n-1, 1:], vec.mask[1:n])
+    np.fill_diagonal(mask[1:, :-1], vec.mask[2*n:3*n-1])
+
+    return np.ma.array(matrix, mask=mask)
 
 
 def vec_i_to_mat_i_p2(idx, n):
@@ -130,60 +105,61 @@ Parameters:
   n: sample points
 '''
 def x_init_p2(mu, nu, n):
-  x = np.zeros(3*n)  # 3n vector: [upper_diag (n) | main_diag (n) | lower_diag (n)]
-  x_marg = np.zeros(n)
-  y_marg = np.zeros(n)
+    mask1 = np.ma.getmaskarray(mu)
+    mask2 = np.ma.getmaskarray(nu) 
 
-  mask1 = (mu != 0)
-  mask2 = (nu != 0)
-  mask = mask1 & mask2
+    # main diagonal: i -> (i, i)
+    mask_main = mask1 | mask2                          
+    # upper diagonal: i -> (i+1, i)
+    mask_upper = np.empty(n, dtype=bool)
+    mask_upper[1:] = mask1[:-1] | mask2[1:]
+    mask_upper[0]  = True        # x[0] is out of bounds
+    # lower diagonal: i -> (i+1, i)
+    mask_lower = np.empty(n, dtype=bool)
+    mask_lower[:-1]  = mask1[1:] | mask2[:-1]
+    mask_lower[-1]   = True        # x[3n-1] is out of bounds
+    # full 3n mask
+    mask_3n = np.concatenate([mask_upper, mask_main, mask_lower])
 
-  # Compute main diagonal values (indices n to 2n-1 of the 3n vector)
-  diag_vals = np.zeros(n)
-  
-  diag_vals[mask] = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
-  
-  x[n:2*n] = diag_vals  # Set main diagonal part
-  
-  x_marg[mask] = diag_vals[mask] / mu[mask]
-  y_marg[mask] = diag_vals[mask] / nu[mask]
+    diag = 2 * mu * nu / (mu + nu)  
+    x_data = np.zeros(3 * n)
+    x_data[n:2*n] = diag.filled(0)
+    x = np.ma.array(x_data, mask=mask_3n)
 
-  return x, x_marg, y_marg, mask1, mask2
+    x_marg = np.ma.array(diag.filled(0) / mu, mask=mask1)
+    y_marg = np.ma.array(diag.filled(0) / nu, mask=mask2)
+
+    return x, x_marg, y_marg, mask_3n
 
 
 '''
 Function to define the gradient of UOT (for p=2)
 Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
-  mask1, mask2: masks for the gradient
   n: sample points
+  mask_3n mask for the gradient
 '''
-def grad_p2(x_marg, y_marg, mask1, mask2, n):
+def grad_p2(x_marg, y_marg, n, mask_3n):
   # Compute derivatives only where masks are true
-  dx = np.zeros(n)
-  dy = np.zeros(n)
-  dx[mask1] = dUp_dx(x_marg[mask1], 2)
-  dy[mask2] = dUp_dx(y_marg[mask2], 2)
+  dx = dUp_dx(x_marg, 2)
+  dy = dUp_dx(y_marg, 2)
   
   # Initialize 3n gradient vector
   grad = np.zeros(3*n)
   
   # Main diagonal: grad[n+i] corresponds to (i,i)
   # Cost: c[i,i] = 0, so grad = 0 + dx[i] + dy[i]
-  m = mask1 & mask2
-  grad[n:2*n][m] = dx[m] + dy[m]
+  grad[n:2*n] = dx + dy
   
   # Upper diagonal: grad[i+1] corresponds to (i, i+1)
   # Cost: c[i,i+1] = 1
-  mask_upper = mask1[:-1] & mask2[1:]
-  grad[1:n][mask_upper] = 1 + dx[:-1][mask_upper] + dy[1:][mask_upper]
+  grad[1:n] = 1 + dx[:-1] + dy[1:]
   
   # Lower diagonal: grad[2n+i] corresponds to (i, i-1)
   # Cost: c[i,i-1] = 1
-  mask_lower = mask1[1:] & mask2[:-1]
-  grad[2*n:3*n-1][mask_lower] = 1 + dx[1:][mask_lower] + dy[:-1][mask_lower]
+  grad[2*n:3*n-1] = 1 + dx[1:] + dy[:-1]
   
-  return grad
+  return np.ma.array(grad, mask=mask_3n)
 
 
 '''
@@ -320,46 +296,42 @@ Function to update the gradient of UOT (3n vector representation)
 Parameters:
   x_marg, y_marg  : X and Y marginals of the transportation plan
   grad            : gradient of UOT (3n vector)
-  mask1, mask2    : masks for the gradient (mu != 0 and nu != 0)
   coords          : pre-computed matrix coordinates (FW_i, FW_j, AFW_i, AFW_j)
 '''
-def update_grad_p2(x_marg, y_marg, grad, mask1, mask2, coords):
+def update_grad_p2(x_marg, y_marg, grad, coords):
   n = x_marg.shape[0]
-  p = 2  # Since this function is specific to p=2
   
   FW_i, FW_j, AFW_i, AFW_j = coords
   
   def update_row(i):
     '''Update gradient entries in row i (main, upper, lower diagonals)'''
-    dUp_x = dUp_dx(x_marg[i], p)
+    dUp_x = dUp_dx(x_marg[i], 2)
     
     # (i, i) main diagonal at index n+i
-    if mask2[i]:
-      grad[n + i] = dUp_dx(y_marg[i], p) + dUp_x
+    grad[n + i] = dUp_dx(y_marg[i], 2) + dUp_x
     
     # (i, i+1) upper diagonal at index i+1
-    if (i + 1 < n) and mask2[i + 1]:
-      grad[i + 1] = 1 + dUp_dx(y_marg[i + 1], p) + dUp_x
+    if (i + 1 < n):
+      grad[i + 1] = 1 + dUp_dx(y_marg[i + 1], 2) + dUp_x
     
     # (i, i-1) lower diagonal at index 2n+i
-    if (i > 0) and mask2[i - 1]:
-      grad[2*n + i - 1] = 1 + dUp_dx(y_marg[i - 1], p) + dUp_x
+    if (i > 0):
+      grad[2*n + i - 1] = 1 + dUp_dx(y_marg[i - 1], 2) + dUp_x
   
   def update_col(j):
     '''Update gradient entries in column j (main, upper, lower diagonals)'''
-    dUp_y = dUp_dx(y_marg[j], p)
+    dUp_y = dUp_dx(y_marg[j], 2)
     
     # (j, j) main diagonal at index n+j
-    if mask1[j]:
-       grad[n + j] = dUp_y + dUp_dx(x_marg[j], p)
+    grad[n + j] = dUp_y + dUp_dx(x_marg[j], 2)
     
     # (j-1, j) upper diagonal at index j
-    if (j > 0) and mask1[j - 1]:
-       grad[j] = 1 + dUp_y + dUp_dx(x_marg[j - 1], p)
+    if (j > 0):
+       grad[j] = 1 + dUp_y + dUp_dx(x_marg[j - 1], 2)
     
     # (j+1, j) lower diagonal at index 2n+j
-    if (j + 1 < n) and mask1[j + 1]:
-       grad[2*n + j] = 1 + dUp_y + dUp_dx(x_marg[j + 1], p)
+    if (j + 1 < n):
+       grad[2*n + j] = 1 + dUp_y + dUp_dx(x_marg[j + 1], 2)
   
   # Update FW row/column if needed
   if FW_i != -1 and FW_j != -1:
@@ -400,8 +372,10 @@ def update_sum_term_p2(sum_term, grad_xk, xk, vk, n, sign):
           elif v == 1 or v == n: coord_set.update([1, n])
           else: coord_set.update([2*n-1, 3*n-2])
 
-    for idx in coord_set:
-       sum_term += sign * grad_xk[idx] * xk[idx]
+    idx_arr = np.fromiter(coord_set, dtype=int)
+    contributions = grad_xk.data[idx_arr] * xk.data[idx_arr] 
+    valid = ~grad_xk.mask[idx_arr] & ~xk.mask[idx_arr] 
+    sum_term += sign * np.sum(contributions[valid])
 
     return sum_term
 
@@ -452,10 +426,13 @@ Parameters:
 def PW_FW_dim1_p2(mu, nu, M,
                   max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
+  # Mask zero entries in mu and nu to deal with measures with zero mass
+  mu = np.ma.masked_equal(mu, 0)
+  nu = np.ma.masked_equal(nu, 0)
 
   # transportation plan, marginals and gradient initialization
-  xk, x_marg, y_marg, mask1, mask2 = x_init_p2(mu, nu, n)
-  grad_xk = grad_p2(x_marg, y_marg, mask1, mask2, n)
+  xk, x_marg, y_marg, mask_3n = x_init_p2(mu, nu, n)
+  grad_xk = grad_p2(x_marg, y_marg, n, mask_3n)
   
   # Initialize sum_term for efficient gap calculation
   sum_term = np.sum(grad_xk * xk)
@@ -493,7 +470,7 @@ def PW_FW_dim1_p2(mu, nu, M,
     xk, x_marg, y_marg = apply_step_p2(xk, x_marg, y_marg, mu, nu, M, vk, coords=(FW_i, FW_j, AFW_i, AFW_j))
 
     # gradient update - pass both 3n indices and coordinates
-    grad_xk = update_grad_p2(x_marg, y_marg, grad_xk, mask1, mask2, coords=(FW_i, FW_j, AFW_i, AFW_j))
+    grad_xk = update_grad_p2(x_marg, y_marg, grad_xk, coords=(FW_i, FW_j, AFW_i, AFW_j))
     
     # Add back contributions from affected rows/columns after gradient update
     sum_term = update_sum_term_p2(sum_term, grad_xk, xk, vk, n, sign=+1)

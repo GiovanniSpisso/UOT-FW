@@ -14,8 +14,8 @@ from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_tru
 
 def make_data(n):
       # 1D measures: size n
-      mu1 = np.random.randint(1, 100, size=n)
-      nu1 = np.random.randint(1, 100, size=n)
+      mu1 = np.random.randint(0, 100, size=n)
+      nu1 = np.random.randint(0, 100, size=n)
       c1 = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
 
       # 2D measures: size n x n

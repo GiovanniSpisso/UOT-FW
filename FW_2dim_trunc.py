@@ -297,21 +297,22 @@ Parameters:
     M: upper bound for generalized simplex
     eps: tolerance
     mu, nu: measures
+    mask1, mask2: masks for valid entries in gradients
 '''
-def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mu, nu):
+def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mu, nu, mask1, mask2):
     grad_si, grad_sj = grad_s
 
     # Frank-Wolfe direction (minimize gradient)
-    if (grad_si.min() + grad_sj.min()) < -eps:
+    if (grad_si[mask1].min() + grad_sj[mask2].min()) < -eps:
         # Find 2D positions of minima
-        FW_si = np.unravel_index(np.argmin(grad_si), grad_si.shape)
-        FW_sj = np.unravel_index(np.argmin(grad_sj), grad_sj.shape)
+        FW_si = np.unravel_index(np.argmin(grad_si[mask1]), grad_si.shape)
+        FW_sj = np.unravel_index(np.argmin(grad_sj[mask2]), grad_sj.shape)
     else:
         FW_si, FW_sj = (-1, -1), (-1, -1)
     
     # Away Frank-Wolfe direction (maximize gradient among active set)
-    mask_si = (si > 0)
-    mask_sj = (sj > 0)
+    mask_si = (si > 0) & mask1
+    mask_sj = (sj > 0) & mask2
     
     if not np.any(mask_si) and not np.any(mask_sj):
         return (FW_si, FW_sj, (-1, -1), (-1, -1))
@@ -740,8 +741,7 @@ def PW_FW_dim2_trunc(mu, nu, M, p, R,
         # LMO
         i_FW, i_AFW = LMO_trunc_dim2_x(xk, grad_xk_x, displacement_map, M, eps=eps)
         vk_x = (i_FW, i_AFW)
-
-        FW_si, FW_sj, AFW_si, AFW_sj = LMO_trunc_dim2_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)
+        FW_si, FW_sj, AFW_si, AFW_sj = LMO_trunc_dim2_s(s_i, s_j, grad_xk_s, M, eps, mu, nu, mask1, mask2)
         vk_s = (FW_si, FW_sj, AFW_si, AFW_sj)
 
         # gap
@@ -763,6 +763,6 @@ def PW_FW_dim2_trunc(mu, nu, M, p, R,
         grad_xk_x, grad_xk_s = update_grad_trunc_dim2(
             x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
             mask1, mask2, c_trunc, displacement_map, p, R, vk_x, vk_s)
-    
+        
     print("FW_2dim_trunc reached max iterations:", max_iter)
     return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

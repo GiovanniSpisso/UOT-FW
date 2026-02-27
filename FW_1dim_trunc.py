@@ -7,7 +7,6 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def Up(x, p):
-    x = np.asarray(x)
     x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
     
     if p == 1:
@@ -32,7 +31,6 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def dUp_dx(x, p):
-    x = np.asarray(x)
     x = np.maximum(x, 0)  # clamp negatives, but assume caller passes valid data
     
     # For x == 0: return 0 (limit of derivative)
@@ -88,35 +86,26 @@ def UOT_cost_upper(cost_trunc, n, si, R, mu):
 
 
 def vector_to_matrix(vec, n, R):
-    '''
-    Convert a vector representation of a banded matrix back to full matrix form.
-    
-    Parameters:
-      vec: 1D array representing the banded matrix
-      n: dimension of the matrix (n x n)
-      R: truncation radius (diagonals from -R to R)
-    
-    Returns:
-      matrix: Full n x n matrix
-    '''
+    vec_mask = np.ma.getmaskarray(vec)  # always an array
     matrix = np.zeros((n, n))
+    mask = np.ones((n, n), dtype=bool)
     pos = 0
-    
+
     for k in range(-R + 1, R):
         m = n - abs(k)
-        
+
         if k >= 0:
             i = np.arange(m)
             j = i + k
         else:
             j = np.arange(m)
             i = j - k
-        
-        # Place the diagonal elements
-        matrix[i, j] = vec[pos:pos + m]
+
+        matrix[i, j] = vec.data[pos:pos + m]
+        mask[i, j]   = vec_mask[pos:pos + m]
         pos += m
-    
-    return matrix
+
+    return np.ma.array(matrix, mask=mask)
 
 
 def vector_index_to_matrix_indices(idx, n, R):

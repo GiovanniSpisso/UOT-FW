@@ -1,15 +1,21 @@
 Problemi da risolvere e cose da fare
 
-1. 25/02:   fai tabella :
+1. 25/02:   MISURE SISTEMATE 
+            DA FARE: 1dim (p2, p1.5, trunc), 2dim (p2, base, trunc)
+            fai tabella :
             n = (provo con 100, 500, 1000, 1500...)
-            p = 2,   dim 1: FW_non_sparse | FW_trunc | POT (solve_sample) | FW_p2
-            p = 1.5, dim 1: FW_non_sparse | FW_trunc | POT (solve_sample) | FW_p1.5
-            p = 1,   dim 1: FW_non_sparse | FW_trunc | POT (solve_sample)
+            p = 2,   dim 1: FW_non_sparse | FW_trunc | FW_p2
+            p = 1.5, dim 1: FW_non_sparse | FW_trunc | FW_p1.5
+            p = 1,   dim 1: FW_non_sparse | FW_trunc | POT (solve_sample) | (altre?)
 
             n = (provo con 10, 20, 30, 40...)
-            p = 2,   dim 2: FW_non_sparse | FW_trunc | POT (solve_sample) | FW_p2
-            p = 1.5, dim 2: FW_non_sparse | FW_trunc | POT (solve_sample) | FW_p1.5
-            p = 1,   dim 2: FW_non_sparse | FW_trunc | POT (solve_sample)
+            p = 2,   dim 2: FW_non_sparse | FW_trunc | FW_p2
+            p = 1.5, dim 2: FW_non_sparse | FW_trunc | FW_p1.5
+            p = 1,   dim 2: FW_non_sparse | FW_trunc | POT (solve_sample) | (altre?)
+
+            far vedere che funziona anche con misure a 0
+
+            vedere se funzionano altre funzioni e come funziona di preciso M per POT
 
           vai avanti con appunti su OT ed UOT   
 

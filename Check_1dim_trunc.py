@@ -9,8 +9,8 @@ import FW_1dim_trunc as fw
 
 # Parameters
 n = 5  # problem size
-p = 1  # entropy parameter
-R = 2  # truncation radius
+p = 2  # entropy parameter
+R = 1  # truncation radius
 
 # Tolerance parameters
 delta = 0.001
@@ -20,8 +20,8 @@ max_iter = 10
 
 # Generate test data
 np.random.seed(0)
-mu = np.random.randint(0, 10, size=n).astype(float)
-nu = np.random.randint(0, 10, size=n).astype(float)
+mu = np.array([0, 1, 1, 1, 0])
+nu = np.array([2, 0, 1, 0, 3])
 
 # Cost function: absolute distance (vector form for truncated support)
 # Store only the diagonals within truncation radius

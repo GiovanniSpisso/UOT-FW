@@ -361,21 +361,10 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     grad_si, grad_sj = grad_s
 
-    # Directional derivative <grad, d>
-    inner = 0.0
-    if FW_x != -1:   inner += grad_x[FW_x]
-    if AFW_x != -1:  inner -= grad_x[AFW_x]
-    if FW_si != -1:  inner += grad_si[FW_si]
-    if AFW_si != -1: inner -= grad_si[AFW_si]
-    if FW_sj != -1:  inner += grad_sj[FW_sj]
-    if AFW_sj != -1: inner -= grad_sj[AFW_sj]
-
     x_updates = {}  # i -> (a_i, mu_i, coeff) where coeff multiplies theta in delta: delta = coeff * theta
     y_updates = {}  # j -> (b_j, nu_j, coeff)
 
     def add_x(i, coeff):
-        if i == -1:
-            return
         a = x_marg[i] + s_i[i]
         if i in x_updates:
             a0, mu0, coeff0 = x_updates[i]
@@ -384,8 +373,6 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
             x_updates[i] = (a, mu[i], coeff)
 
     def add_y(j, coeff):
-        if j == -1:
-            return
         b = y_marg[j] + s_j[j]
         if j in y_updates:
             b0, nu0, coeff0 = y_updates[j]
@@ -393,27 +380,36 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
         else:
             y_updates[j] = (b, nu[j], coeff)
 
-    # Contributions to marginals from x-plan FW/AFW (these affect x_marg at i_* and y_marg at j_*)
-    add_x(i_FW,  +1.0 / mu[i_FW] if i_FW != -1 else 0.0)
-    add_y(j_FW,  +1.0 / nu[j_FW] if j_FW != -1 else 0.0)
-    add_x(i_AFW, -1.0 / mu[i_AFW] if i_AFW != -1 else 0.0)
-    add_y(j_AFW, -1.0 / nu[j_AFW] if j_AFW != -1 else 0.0)
-
-    # Contributions from supports FW/AFW
-    add_x(FW_si,  +1.0 / mu[FW_si] if FW_si != -1 else 0.0)
-    add_x(AFW_si, -1.0 / mu[AFW_si] if AFW_si != -1 else 0.0)
-    add_y(FW_sj,  +1.0 / nu[FW_sj] if FW_sj != -1 else 0.0)
-    add_y(AFW_sj, -1.0 / nu[AFW_sj] if AFW_sj != -1 else 0.0)
-
-    # Constant linear coefficient for cost term
-    cost_lin = 0.0
-    if FW_x != -1:  cost_lin += c[FW_x]
-    if AFW_x != -1: cost_lin -= c[AFW_x]
-
-    # Constant linear coefficient for R penalty
-    penalty_lin = 0.0
-    if FW_sj != -1:  penalty_lin += R
-    if AFW_sj != -1: penalty_lin -= R
+    # Directional derivative <grad, d> + 
+    # Contributions to marginals from x-plan FW/AFW (these affect x_marg at i_* and y_marg at j_*) +
+    # Contributions from supports FW/AFW +
+    inner = 0.0
+    cost_lin = 0.0      # Constant linear coefficient for cost term
+    penalty_lin = 0.0   # Constant linear coefficient for R penalty
+    if FW_x != -1: 
+        inner += grad_x[FW_x]
+        add_x(i_FW,  +1.0 / mu[i_FW])
+        add_y(j_FW,  +1.0 / nu[j_FW])
+        cost_lin += c[FW_x]
+    if AFW_x != -1:  
+        inner -= grad_x[AFW_x]
+        add_x(i_AFW, -1.0 / mu[i_AFW])
+        add_y(j_AFW, -1.0 / nu[j_AFW])
+        cost_lin -= c[AFW_x]
+    if FW_si != -1:  
+        inner += grad_si[FW_si]
+        add_x(FW_si,  +1.0 / mu[FW_si])
+        penalty_lin += R
+    if AFW_si != -1: 
+        inner -= grad_si[AFW_si]
+        add_x(AFW_si, -1.0 / mu[AFW_si])
+        penalty_lin -= R
+    if FW_sj != -1:  
+        inner += grad_sj[FW_sj]
+        add_y(FW_sj,  +1.0 / nu[FW_sj])
+    if AFW_sj != -1: 
+        inner -= grad_sj[AFW_sj]
+        add_y(AFW_sj, -1.0 / nu[AFW_sj])
 
     def obj_change(theta_val):
         diff = theta_val * (cost_lin + penalty_lin)
@@ -433,9 +429,12 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     # Backtracking
     diff = obj_change(theta)
     while diff > beta * theta * inner:
+        print("object changed = ", diff)
+        print("Minimum Armijo Change = ", beta * theta * inner)
         theta *= gamma
         diff = obj_change(theta)
-
+    
+    print("Theta chosen: ", theta)
     return theta
 
 
@@ -604,7 +603,7 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
     # Compute maximum allowed step size respecting all constraints
     gamma_max = compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M, mu, nu)
 
-    print(gamma_max)
+    print("Gamma max final: ",gamma_max)
     
     # Compute step size using Armijo with gamma_max as upper bound
     result = step_calc(x_marg, y_marg, grad_xk_x, grad_xk_s,
@@ -677,8 +676,7 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
 
         # gap calculation
         gap = gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s, mu, nu)
-        
-        print(gap)
+        print("gap: ", gap)
 
         if (gap <= delta) or (vk_x == (-1, -1) and vk_s == (-1, -1, -1, -1)):
             print("FW_1dim_trunc converged after: ", k, " iterations ")
@@ -692,9 +690,6 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
         # Update gradient
         grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 
                                                  p, n, R, v_coords, vk_s)
-        
-        print("grad_xk_x: ", grad_xk_x)
-        print("grad_xk_s: ", grad_xk_s)
     
     print("FW_1dim_trunc converged after: ", max_iter, " iterations ")
     return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

@@ -11,9 +11,9 @@ np.set_printoptions(precision=3, suppress=True)
 # ──────────────────────────────────────────────
 # Parameters
 # ──────────────────────────────────────────────
-n        = 2000
+n        = 1000
 max_iter = 10000
-R        = 3
+R        = 5
 p        = 1
 delta    = 0.001
 eps      = 0.001

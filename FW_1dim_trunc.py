@@ -11,11 +11,11 @@ def Up(x, p):
     
     if p == 1:
         # For x == 0: result = 1 (limit)
-        result = np.ones_like(x, dtype=float)
+        result = np.ones_like(x, dtype=np.float32)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = x[mask_nonzero] * np.log(x[mask_nonzero]) - x[mask_nonzero] + 1
     elif p == 0:
-        result = np.ones_like(x, dtype=float)
+        result = np.ones_like(x, dtype=np.float32)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = x[mask_nonzero] - 1 - np.log(x[mask_nonzero])
     else:
@@ -35,11 +35,11 @@ def dUp_dx(x, p):
     
     # For x == 0: return 0 (limit of derivative)
     if p == 1:
-        result = np.zeros_like(x, dtype=float)
+        result = np.zeros_like(x, dtype=np.float32)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = np.log(x[mask_nonzero])
     elif p < 1:
-        result = np.zeros_like(x, dtype=float)
+        result = np.zeros_like(x, dtype=np.float32)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = (x[mask_nonzero]**(p-1) - 1) / (p - 1)
     else:
@@ -183,7 +183,7 @@ Parameters:
     p: main parameter that defines the p-entropy
 '''
 def x_init_trunc(mu, nu, n, c, p):
-    diag = np.zeros(n, dtype=float)
+    diag = np.zeros(n, dtype=np.float32)
     if p == 2:
         diag = 2 * mu * nu / (mu + nu)
     elif p == 1:
@@ -194,7 +194,7 @@ def x_init_trunc(mu, nu, n, c, p):
         diag = ((mu * nu) / (mu**(p-1) + nu**(p-1))**(1/(p-1))) * 2**(1/(p-1))
 
     # locate main diagonal (k=0) in the vector
-    x = np.zeros(len(c), dtype=float)
+    x = np.zeros(len(c), dtype=np.float32)
     x[c == 0] = diag
     x_marg = diag / mu
     y_marg = diag / nu
@@ -215,7 +215,7 @@ Parameters:
 def grad_trunc(x_marg, y_marg, c, p, n, R):
     dx = dUp_dx(x_marg, p)
     dy = dUp_dx(y_marg, p)
-    grad_x = np.zeros_like(c, dtype=float)
+    grad_x = np.zeros_like(c, dtype=np.float32)
     
     pos = 0
     for k in range(-R + 1, R):
@@ -256,7 +256,7 @@ def LMO_x(pi, grad_x, M, eps):
         FW_x = -1
         
     # Away Frank-Wolfe direction
-    mask = (pi > 0)
+    mask = (pi > eps * 0.1)
     
     if not np.any(mask):
         return (FW_x, -1)
@@ -292,8 +292,8 @@ def LMO_s(si, sj, grad_s, M, eps, mu, nu):
     else:
         FW_si, FW_sj = -1, -1
     
-    mask_si = (si > 0)
-    mask_sj = (sj > 0)
+    mask_si = (si > eps * 0.1)
+    mask_sj = (sj > eps * 0.1)
     if not np.any(mask_si) and not np.any(mask_sj):
         return (FW_si, FW_sj, -1, -1)
     else:
@@ -365,19 +365,19 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     y_updates = {}  # j -> (b_j, nu_j, coeff)
 
     def add_x(i, coeff):
-        a = x_marg[i] + s_i[i]
         if i in x_updates:
             a0, mu0, coeff0 = x_updates[i]
             x_updates[i] = (a0, mu0, coeff0 + coeff)
         else:
+            a = x_marg[i] + s_i[i]
             x_updates[i] = (a, mu[i], coeff)
 
     def add_y(j, coeff):
-        b = y_marg[j] + s_j[j]
         if j in y_updates:
             b0, nu0, coeff0 = y_updates[j]
             y_updates[j] = (b0, nu0, coeff0 + coeff)
         else:
+            b = y_marg[j] + s_j[j]
             y_updates[j] = (b, nu[j], coeff)
 
     # Directional derivative <grad, d> + 
@@ -388,8 +388,8 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     penalty_lin = 0.0   # Constant linear coefficient for R penalty
     if FW_x != -1: 
         inner += grad_x[FW_x]
-        add_x(i_FW,  +1.0 / mu[i_FW])
-        add_y(j_FW,  +1.0 / nu[j_FW])
+        add_x(i_FW, +1.0 / mu[i_FW])
+        add_y(j_FW, +1.0 / nu[j_FW])
         cost_lin += c[FW_x]
     if AFW_x != -1:  
         inner -= grad_x[AFW_x]
@@ -398,19 +398,17 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
         cost_lin -= c[AFW_x]
     if FW_si != -1:  
         inner += grad_si[FW_si]
-        add_x(FW_si,  +1.0 / mu[FW_si])
+        inner += grad_sj[FW_sj]
+        add_x(FW_si, +1.0 / mu[FW_si])
+        add_y(FW_sj, +1.0 / nu[FW_sj])
         penalty_lin += R
     if AFW_si != -1: 
         inner -= grad_si[AFW_si]
-        add_x(AFW_si, -1.0 / mu[AFW_si])
-        penalty_lin -= R
-    if FW_sj != -1:  
-        inner += grad_sj[FW_sj]
-        add_y(FW_sj,  +1.0 / nu[FW_sj])
-    if AFW_sj != -1: 
         inner -= grad_sj[AFW_sj]
+        add_x(AFW_si, -1.0 / mu[AFW_si])
         add_y(AFW_sj, -1.0 / nu[AFW_sj])
-
+        penalty_lin -= R
+        
     def obj_change(theta_val):
         diff = theta_val * (cost_lin + penalty_lin)
 
@@ -429,12 +427,33 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     # Backtracking
     diff = obj_change(theta)
     while diff > beta * theta * inner:
-        print("object changed = ", diff)
-        print("Minimum Armijo Change = ", beta * theta * inner)
         theta *= gamma
         diff = obj_change(theta)
+        if theta < 1e-6:  # safeguard against too small step sizes
+            print("diff: ", diff, ", beta*theta*inner: ", beta*theta*inner)
+            if FW_x != -1:
+                print("grad_x[FW_x]: ", grad_x[FW_x], ", cost_lin: ", cost_lin)
+            if FW_si != -1:
+                print("grad_si[FW_si]: ", grad_si[FW_si], ", penalty_lin: ", penalty_lin)
+            if AFW_x != -1:
+                print("grad_x[AFW_x]: ", grad_x[AFW_x])
+            if AFW_si != -1:
+                print("grad_si[AFW_si]: ", grad_si[AFW_si])
+            diff = theta * (cost_lin + penalty_lin)
+            print("diff without entropy: ", diff)
+            # Entropy changes for x marginals
+            for _, (a, mu_i, coeff) in x_updates.items():
+                print("a: ", a, ", mu_i: ", mu_i, ", coeff: ", coeff)
+                d = coeff * theta
+                print("x update: ", (Up(a + d, p) - Up(a, p)) * mu_i)
+
+            # Entropy changes for y marginals
+            for _, (b, nu_j, coeff) in y_updates.items():
+                print("b: ", b, ", nu_j: ", nu_j, ", coeff: ", coeff)
+                d = coeff * theta
+                print("y update: ", (Up(b + d, p) - Up(b, p)) * nu_j)
+            return 0
     
-    print("Theta chosen: ", theta)
     return theta
 
 
@@ -483,13 +502,13 @@ def compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M
     if AFW_x != -1:
         gamma_max = min(gamma_max, xk[AFW_x])
     elif FW_x != -1:
-        gamma_max = min(gamma_max, M - np.sum(xk) + xk[FW_x])
+        gamma_max = min(gamma_max, M - np.sum(xk) + xk[FW_x]) 
     
     # Constraints from s_i
     if FW_si != -1:
         gamma_max = min(gamma_max, M - np.sum(s_i*mu) + s_i[FW_si]*mu[FW_si])
     if AFW_si != -1:
-        gamma_max = min(gamma_max, s_i[AFW_si]*mu[AFW_si])
+        gamma_max = min(gamma_max, s_i[AFW_si]*mu[AFW_si]) 
     
     # Constraints from s_j
     if FW_sj != -1:
@@ -603,12 +622,31 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
     # Compute maximum allowed step size respecting all constraints
     gamma_max = compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M, mu, nu)
 
-    print("Gamma max final: ",gamma_max)
-    
     # Compute step size using Armijo with gamma_max as upper bound
     result = step_calc(x_marg, y_marg, grad_xk_x, grad_xk_s,
                       mu, nu, vk_x, vk_s, s_i, s_j, c, p, n, R, 
                       theta = gamma_max)
+    
+    ######################################################
+    # to delete
+    if result[0] == 0:
+        print("gamma_max init: ", gamma_max)
+        FW_x, AFW_x = vk_x
+        FW_si, FW_sj, AFW_si, AFW_sj = vk_s
+        if FW_x != -1:
+            print("x[FW_x]: ", xk[FW_x])
+        if AFW_x != -1:
+            print("x[AFW_x]: ", xk[AFW_x])
+        if FW_si != -1:
+            print("si[FW_si]: ", s_i[FW_si])
+        if AFW_si != -1:
+            print("si[AFW_si]: ", s_i[AFW_si])
+        if FW_sj != -1:
+            print("sj[FW_sj]: ", s_j[FW_sj])
+        if AFW_sj != -1:
+            print("sj[AFW_sj]: ", s_j[AFW_sj])
+        raise ValueError("Armijo returned zero step size")
+    ######################################################
     
     if isinstance(result, tuple):
         gammak, i_FW, j_FW, i_AFW, j_AFW = result
@@ -662,21 +700,17 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
     # transportation plan, marginals, cost and gradient initialization
     xk, x_marg, y_marg = x_init_trunc(mu, nu, n, c, p)
 
-    s_i, s_j = np.zeros(n), np.zeros(n)
+    s_i, s_j = np.zeros(n, dtype=np.float32), np.zeros(n, dtype=np.float32)
     grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, c, p, n, R)
 
     for k in range(max_iter):
-        print(k)
+        #print(k)
         # LMO call
         vk_x = LMO_x(xk, grad_xk_x, M, eps)
         vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)
 
-        print("vk_x: ", vk_x)
-        print("vk_s: ", vk_s)
-
         # gap calculation
         gap = gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s, mu, nu)
-        print("gap: ", gap)
 
         if (gap <= delta) or (vk_x == (-1, -1) and vk_s == (-1, -1, -1, -1)):
             print("FW_1dim_trunc converged after: ", k, " iterations ")

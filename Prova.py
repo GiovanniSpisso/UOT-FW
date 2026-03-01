@@ -6,16 +6,16 @@ from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost, UOT_cost_upper
 # Set precision to 3 decimal places
 np.set_printoptions(precision=3, suppress=True)
 
-n        = 500
-max_iter = 11
-R        = 3
+n        = 1000
+max_iter = 10000
+R        = 5
 p        = 1
 delta    = 0.001
 eps      = 0.001
 
 np.random.seed(0)
-mu = np.random.randint(1, 100, size=n)
-nu = np.random.randint(1, 100, size=n)
+mu = np.random.randint(1, 1000, size=n)
+nu = np.random.randint(1, 1000, size=n)
 M  = n * (np.sum(mu) + np.sum(nu))
 
 c_trunc = np.concatenate([np.full(n - abs(k), abs(k)) for k in range(-R + 1, R)])

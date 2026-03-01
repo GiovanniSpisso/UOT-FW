@@ -1,10 +1,14 @@
 Problemi da risolvere e cose da fare
 
 1. 25/02:   DA CHIEDERE: np.ma è ottimizzato o si può fare di meglio?
+            DA CHIDERE: va bene se uso np.float32? Ho problemi di approssimazioni altrimenti / non mi servono più cifre
+                        in generale, ho problemi di approssimazione (es. entrate a 10^-16 che creano problemi, etc.)
+                        I problemi di approssimazione sono stati parzialmente risolti, ma NON del tutto mettendo un
+                        check ulteriore sul LMO sulle coordinate da prendere, però non è sufficiente!
             DA CHIEDERE: in Armijo step, lo step max iniziale da cui partire, a parte M - sum + xk... 
                          se M è MOLTO grande, è uno step TROPPO grande... si può dire di meglio? 
                          (tipo: parti da max(1000, M-sum+xk))
-            DA FARE: 2dim (p2, base, trunc)
+            DA FARE: 2dim (p2, base, trunc) (con o senza np.ma?)
             fai tabella :
             n = (provo con 100, 500, 1000, 1500...)
             p = 2,   dim 1: FW_non_sparse | FW_trunc | FW_p2

@@ -79,45 +79,56 @@ def x_init_dim2(mu, nu, p, n):
     x_marg = np.zeros((n, n))
     y_marg = np.zeros((n, n))
 
+    mask1 = (mu != 0)
+    mask2 = (nu != 0)
+    mask = mask1 & mask2
+
     if p == 2:
-        vals = 2 * mu * nu / den
+        vals = 2 * mu[mask] * nu[mask] / den[mask]
 
     elif p == 1:
-        vals = np.sqrt(mu * nu)
+        vals = np.sqrt(mu[mask] * nu[mask])
 
     elif p < 1:
         vals = (
-            (mu**(p-1) + nu**(p-1)) /
-            (2 * (mu**(p-1) * nu**(p-1)))
+            (mu[mask]**(p-1) + nu[mask]**(p-1)) /
+            (2 * (mu[mask]**(p-1) * nu[mask]**(p-1)))
         )**(1/(1-p))
 
     else:  # p > 1
-        vals = (mu * nu) / (mu**(p-1) + nu**(p-1))**(1/(p-1)) * 2**(1/(p-1))
+        vals = (mu[mask] * nu[mask]) / (mu[mask]**(p-1) + nu[mask]**(p-1))**(1/(p-1)) * 2**(1/(p-1))
 
-    i, j = np.indices(vals.shape)
-    x[i, j, i, j] = vals
+    x[mask, mask] = vals
 
     # Marginals
-    x_marg = vals / mu
-    y_marg = vals / nu
+    x_marg[mask] = vals / mu[mask]
+    y_marg[mask] = vals / nu[mask]
 
-    return x, x_marg, y_marg
+    return x, x_marg, y_marg, mask1, mask2
 
 
 '''
 Function to define the gradient of UOT
 Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
+  mask1, mask2: mask for the zero coordinates
   p: main parameter that defines the p-entropy
   c: cost function
 '''
-def grad_dim2(x_marg, y_marg, p, c):
+def grad_dim2(x_marg, y_marg, mask1, mask2, p, c):
     # Compute the gradients separately
     dx = dUp_dx(x_marg, p)  # shape (n, n)
     dy = dUp_dx(y_marg, p)  # shape (n, n)
 
     # Add separable gradient terms
     grad_UOT = c + dx[:, :, None, None] + dy[None, None, :, :]
+
+    # Apply masks
+    mask_i_j = mask1[:, :, None, None]   # broadcast mask1 over k,l
+    mask_k_l = mask2[None, None, :, :]   # broadcast mask2 over i,j
+    mask = mask_i_j & mask_k_l
+
+    grad_UOT *= mask  # zero out entries where mask is False
 
     return grad_UOT
 
@@ -285,34 +296,35 @@ Update the gradient
 Parameters:
   x_marg, y_marg  : X and Y marginals of the transportation plan
   grad_UOT        : gradient of UOT
+  mask1,mask2     : masks for the zero coordinates
   c               : cost function
   v               : ((x1FW,x2FW,y1FW,y2FW), (x1AFW,x2AFW,y1AFW,y2AFW))
   p               : main parameter that defines the p-entropy
   """
-def grad_update_dim2(x_marg, y_marg, grad_UOT, c, v, p):
+def grad_update_dim2(x_marg, y_marg, grad_UOT, mask1, mask2, c, v, p):
     (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = v
     if x1FW != -1:
         # Update all entries where source is (x1FW, x2FW)
-        grad_UOT[x1FW, x2FW, :, :] = (
-            c[x1FW, x2FW, :, :] + 
-            dUp_dx(y_marg[:, :], p) + 
+        grad_UOT[x1FW, x2FW, mask2] = (
+            c[x1FW, x2FW, mask2] + 
+            dUp_dx(y_marg[mask2], p) + 
             dUp_dx(x_marg[x1FW, x2FW], p))
         # Update all entries where target is (y1FW, y2FW)
-        grad_UOT[:, :, y1FW, y2FW] = (
-            c[:, :, y1FW, y2FW] + 
+        grad_UOT[mask1, y1FW, y2FW] = (
+            c[mask1, y1FW, y2FW] + 
             dUp_dx(y_marg[y1FW, y2FW], p) + 
-            dUp_dx(x_marg[:, :], p))
+            dUp_dx(x_marg[mask1], p))
     if x1AFW != -1:
         # Update all entries where source is (x1AFW, x2AFW)
-        grad_UOT[x1AFW, x2AFW, :, :] = (
-            c[x1AFW, x2AFW, :, :] + 
-            dUp_dx(y_marg[:, :], p) + 
+        grad_UOT[x1AFW, x2AFW, mask2] = (
+            c[x1AFW, x2AFW, mask2] + 
+            dUp_dx(y_marg[mask2], p) + 
             dUp_dx(x_marg[x1AFW, x2AFW], p))
         # Update all entries where target is (y1AFW, y2AFW)
-        grad_UOT[:, :, y1AFW, y2AFW] = (
-            c[:, :, y1AFW, y2AFW] + 
+        grad_UOT[mask1, y1AFW, y2AFW] = (
+            c[mask1, y1AFW, y2AFW] + 
             dUp_dx(y_marg[y1AFW, y2AFW], p) + 
-            dUp_dx(x_marg[:, :], p))
+            dUp_dx(x_marg[mask1], p))
     
     return grad_UOT
 
@@ -323,18 +335,20 @@ Parameters:
   sum_term: Current sum value
   grad_xk: Gradient tensor (n, n, n, n)
   xk: Current plan tensor (n, n, n, n)
+  mask1: Boolean mask for source coordinates (n, n)
+  mask2: Boolean mask for target coordinates (n, n)
   rows: Set of affected source coordinate pairs {(x1, x2), ...}
   cols: Set of affected target coordinate pairs {(y1, y2), ...}
   sign: +1 or -1
 """
-def update_sum_term_dim2(sum_term, grad_xk, xk, rows, cols, sign=1):
+def update_sum_term_dim2(sum_term, grad_xk, xk, mask1, mask2, rows, cols, sign=1):
     # Update contributions for affected target coordinates (y1, y2)
     for y1, y2 in cols:
-        sum_term += sign * np.sum(grad_xk[:, :, y1, y2] * xk[:, :, y1, y2])
+        sum_term += sign * np.sum(grad_xk[mask1, y1, y2] * xk[mask1, y1, y2])
 
     # Update contributions for affected source coordinates (x1, x2)
     for x1, x2 in rows:
-        sum_term += sign * np.sum(grad_xk[x1, x2, :, :] * xk[x1, x2, :, :])
+        sum_term += sign * np.sum(grad_xk[x1, x2, mask2] * xk[x1, x2, mask2])
 
     # Remove double-counted intersections
     for x1, x2 in rows:
@@ -396,8 +410,8 @@ def PW_FW_dim2(mu, nu, M, p, c,
                max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
   # transportation plan, marginals and gradient initialization
-  xk, x_marg, y_marg = x_init_dim2(mu, nu, p, n)
-  grad_xk = grad_dim2(x_marg, y_marg, p, c)
+  xk, x_marg, y_marg, mask1, mask2 = x_init_dim2(mu, nu, p, n)
+  grad_xk = grad_dim2(x_marg, y_marg, mask1, mask2, p, c)
 
   # Initialize sum_term for efficient gap calculation
   sum_term = np.sum(grad_xk * xk)
@@ -421,16 +435,18 @@ def PW_FW_dim2(mu, nu, M, p, c,
     source_coords = set([(x1FW, x2FW), (x1AFW, x2AFW)]) - {(-1, -1)}
     
     # Remove contributions before gradient update
-    sum_term = update_sum_term_dim2(sum_term, grad_xk, xk, source_coords, target_coords, sign=-1)
+    sum_term = update_sum_term_dim2(sum_term, grad_xk, xk, mask1, mask2,
+                               source_coords, target_coords, sign=-1)
 
     # Apply step update
     xk, x_marg, y_marg = apply_step_dim2(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, c, p)
 
     # gradient update
-    grad_xk = grad_update_dim2(x_marg, y_marg, grad_xk, c, vk, p)
+    grad_xk = grad_update_dim2(x_marg, y_marg, grad_xk, mask1, mask2, c, vk, p)
 
     # Add back contributions after gradient update
-    sum_term = update_sum_term_dim2(sum_term, grad_xk, xk, source_coords, target_coords, sign=+1)
+    sum_term = update_sum_term_dim2(sum_term, grad_xk, xk, mask1, mask2,
+                               source_coords, target_coords, sign=+1)
 
   
   print("FW_2dim reached max iterations: ", max_iter)

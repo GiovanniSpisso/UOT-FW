@@ -20,7 +20,7 @@ import pandas as pd
 df1 = pd.read_csv("DOTmark_1.0/data512_1001.csv", header=None)
 df2 = pd.read_csv("DOTmark_1.0/data512_1002.csv", header=None)
 
-np.random.seed(0)
+#np.random.seed(0)
 n = 512
 eps = 0.001
 

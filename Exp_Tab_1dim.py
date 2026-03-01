@@ -11,9 +11,9 @@ np.set_printoptions(precision=3, suppress=True)
 # ──────────────────────────────────────────────
 # Parameters
 # ──────────────────────────────────────────────
-n        = 1000
+n        = 2000
 max_iter = 10000
-R        = 5
+R        = 3
 p        = 1
 delta    = 0.001
 eps      = 0.001
@@ -94,7 +94,7 @@ results = {}
 #results['FW_1dim_p2']    = run_FW_1dim_p2()
 #results['FW_1dim_p1_5']  = run_FW_1dim_p1_5()
 results['FW_1dim_trunc'] = run_FW_1dim_trunc()
-results['POT']           = run_POT()
+#results['POT']           = run_POT()
 
 # ──────────────────────────────────────────────
 # PRINT RESULTS

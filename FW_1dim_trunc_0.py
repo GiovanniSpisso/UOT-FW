@@ -506,7 +506,7 @@ Parameters:
     mu, nu: measures
 '''
 def compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M, mu, nu):
-    gamma_max = np.inf
+    gamma_max = max(np.max(mu), np.max(nu))
     
     # Constraints from x coordinates
     if AFW_x != -1:

@@ -474,7 +474,7 @@ def apply_step_p1_5(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, coords):
   FW_i, FW_j, AFW_i, AFW_j = coords  # matrix coordinates
 
   if AFW_i != -1:
-    gamma0 = xk[AFW] - 1e-10
+    gamma0 = xk[AFW]
     gammak = step_calc_p1_5(x_marg, y_marg, grad_xk, mu, nu, vk, p=1.5,
                             coords=coords, theta=gamma0)
     xk[AFW] -= gammak
@@ -485,7 +485,7 @@ def apply_step_p1_5(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, coords):
       x_marg[FW_i] += gammak / mu[FW_i]
       y_marg[FW_j] += gammak / nu[FW_j]
   else:
-    gamma0 = M - np.sum(xk) + xk[FW] - 1e-10
+    gamma0 = min(max(np.max(mu), np.max(nu)), M - np.sum(xk) + xk[FW]) 
     gammak = step_calc_p1_5(x_marg, y_marg, grad_xk, mu, nu, vk, p=1.5,
                             coords=coords, theta=gamma0)
     xk[FW] += gammak

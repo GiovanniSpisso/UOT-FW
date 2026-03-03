@@ -371,7 +371,7 @@ def apply_step_p2(xk, x_marg, y_marg, mu, nu, M, vk, coords):
     FW_i, FW_j, AFW_i, AFW_j = coords  # matrix coordinates
     
     if AFW_i != -1:
-      gamma0 = xk[AFW] - 1e-10
+      gamma0 = xk[AFW]
       gammak = min(opt_step(x_marg, y_marg, mu, nu, coords=coords), gamma0)
       xk[AFW] -= gammak
       x_marg[AFW_i] -= gammak / mu[AFW_i]
@@ -381,7 +381,7 @@ def apply_step_p2(xk, x_marg, y_marg, mu, nu, M, vk, coords):
         x_marg[FW_i] += gammak / mu[FW_i]
         y_marg[FW_j] += gammak / nu[FW_j]
     else:
-      gamma0 = M - np.sum(xk) + xk[FW] - 1e-10
+      gamma0 = min(max(np.max(mu), np.max(nu)), M - np.sum(xk) + xk[FW])
       gammak = min(opt_step(x_marg, y_marg, mu, nu, coords=coords), gamma0)
       xk[FW] += gammak
       x_marg[FW_i] += gammak / mu[FW_i]

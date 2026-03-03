@@ -303,7 +303,7 @@ def apply_step(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, c, p):
   FW_i, FW_j, AFW_i, AFW_j = vk  # coordinates
   
   if AFW_i != -1:
-    gamma0 = xk[AFW_i, AFW_j] - 1e-10
+    gamma0 = xk[AFW_i, AFW_j]
     # stepsize
     gammak = step_calc(x_marg, y_marg, grad_xk, mu, nu, vk, c, p, theta = gamma0)
     xk[AFW_i, AFW_j] -= gammak
@@ -314,7 +314,7 @@ def apply_step(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, c, p):
       x_marg[FW_i] += gammak / mu[FW_i]
       y_marg[FW_j] += gammak / nu[FW_j]
   else:
-    gamma0 = M - np.sum(xk) + xk[FW_i, FW_j]
+    gamma0 = min(max(np.max(mu), np.max(nu)), M - np.sum(xk) + xk[FW_i, FW_j])
     # stepsize
     gammak = step_calc(x_marg, y_marg, grad_xk, mu, nu, vk, c, p, theta = gamma0)
     xk[FW_i, FW_j] += gammak

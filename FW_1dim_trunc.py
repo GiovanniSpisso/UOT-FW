@@ -429,7 +429,7 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     while diff > beta * theta * inner:
         theta *= gamma
         diff = obj_change(theta)
-        if theta < 1e-6:  # safeguard against too small step sizes
+        if theta < 1e-7:  # safeguard against too small step sizes
             print("diff: ", diff, ", beta*theta*inner: ", beta*theta*inner)
             if FW_x != -1:
                 print("grad_x[FW_x]: ", grad_x[FW_x], ", cost_lin: ", cost_lin)
@@ -496,7 +496,7 @@ Parameters:
     mu, nu: measures
 '''
 def compute_gamma_max(xk, s_i, s_j, FW_x, AFW_x, FW_si, AFW_si, FW_sj, AFW_sj, M, mu, nu):
-    gamma_max = np.inf
+    gamma_max = max(np.max(mu),np.max(nu))
     
     # Constraints from x coordinates
     if AFW_x != -1:
@@ -645,7 +645,8 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
             print("sj[FW_sj]: ", s_j[FW_sj])
         if AFW_sj != -1:
             print("sj[AFW_sj]: ", s_j[AFW_sj])
-        raise ValueError("Armijo returned zero step size")
+        return 0
+        #raise ValueError("Armijo returned zero step size")
     ######################################################
     
     if isinstance(result, tuple):
@@ -717,9 +718,13 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
             return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j
         
         # Apply step update
-        xk, x_marg, y_marg, s_i, s_j, v_coords = apply_step_trunc(
+        step =  apply_step_trunc(
             xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
             mu, nu, M, vk_x, vk_s, c, p, n, R)
+        if step == 0:
+            print("FW_1dim_trunc converged after: ", k, " iterations ")
+            return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j
+        else: xk, x_marg, y_marg, s_i, s_j, v_coords = step
 
         # Update gradient
         grad_xk_x, grad_xk_s = update_grad_trunc(x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s, 

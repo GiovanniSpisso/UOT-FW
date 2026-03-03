@@ -11,12 +11,12 @@ np.set_printoptions(precision=3, suppress=True)
 # ──────────────────────────────────────────────
 # Parameters
 # ──────────────────────────────────────────────
-n        = 500
-max_iter = 10000
+n        = 5
+max_iter = 2
 R        = 5
 p        = 1
 delta    = 0.001
-eps      = 0.001
+eps      = 0.00001
 
 np.random.seed(0)
 mu = np.random.randint(1, 1000, size=n)
@@ -90,7 +90,7 @@ def run_POT():
 # Comment out any line to skip that solver entirely.
 # ──────────────────────────────────────────────
 results = {}
-#results['FW_1dim']       = run_FW_1dim()
+results['FW_1dim']       = run_FW_1dim()
 #results['FW_1dim_p2']    = run_FW_1dim_p2()
 #results['FW_1dim_p1_5']  = run_FW_1dim_p1_5()
 results['FW_1dim_trunc'] = run_FW_1dim_trunc()

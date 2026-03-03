@@ -361,6 +361,8 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     grad_si, grad_sj = grad_s
 
+    print("i_FW, j_FW, i_AFW, j_AFW: ", v_coords)
+
     x_updates = {}  # i -> (a_i, mu_i, coeff) where coeff multiplies theta in delta: delta = coeff * theta
     y_updates = {}  # j -> (b_j, nu_j, coeff)
 
@@ -426,33 +428,33 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
 
     # Backtracking
     diff = obj_change(theta)
+    print("theta init: ", theta)
+    if FW_x != -1:
+        print("grad_x[FW_x]: ", grad_x[FW_x], ", cost_lin: ", cost_lin)
+    if FW_si != -1:
+        print("grad_si[FW_si]: ", grad_si[FW_si], ", penalty_lin: ", penalty_lin)
+    if AFW_x != -1:
+        print("grad_x[AFW_x]: ", grad_x[AFW_x])
+    if AFW_si != -1:
+        print("grad_si[AFW_si]: ", grad_si[AFW_si])
     while diff > beta * theta * inner:
+        print("beta: ", beta, ", theta: ", theta, ", inner: ", inner)
+        print("diff: ", diff, ", beta*theta*inner: ", beta*theta*inner)
+        diff = theta * (cost_lin + penalty_lin)
+        print("diff without entropy: ", diff)
+        # Entropy changes for x marginals
+        for _, (a, mu_i, coeff) in x_updates.items():
+            #print("x_marg: ", a, ", mu_i: ", mu_i, ", coeff: ", coeff)
+            d = coeff * theta
+            print("x update: ", (Up(a + d, p) - Up(a, p)) * mu_i)
+        # Entropy changes for y marginals
+        for _, (b, nu_j, coeff) in y_updates.items():
+            #print("y_marg: ", b, ", nu_j: ", nu_j, ", coeff: ", coeff)
+            d = coeff * theta
+            print("y update: ", (Up(b + d, p) - Up(b, p)) * nu_j)
+        
         theta *= gamma
         diff = obj_change(theta)
-        if theta < 1e-7:  # safeguard against too small step sizes
-            print("diff: ", diff, ", beta*theta*inner: ", beta*theta*inner)
-            if FW_x != -1:
-                print("grad_x[FW_x]: ", grad_x[FW_x], ", cost_lin: ", cost_lin)
-            if FW_si != -1:
-                print("grad_si[FW_si]: ", grad_si[FW_si], ", penalty_lin: ", penalty_lin)
-            if AFW_x != -1:
-                print("grad_x[AFW_x]: ", grad_x[AFW_x])
-            if AFW_si != -1:
-                print("grad_si[AFW_si]: ", grad_si[AFW_si])
-            diff = theta * (cost_lin + penalty_lin)
-            print("diff without entropy: ", diff)
-            # Entropy changes for x marginals
-            for _, (a, mu_i, coeff) in x_updates.items():
-                print("a: ", a, ", mu_i: ", mu_i, ", coeff: ", coeff)
-                d = coeff * theta
-                print("x update: ", (Up(a + d, p) - Up(a, p)) * mu_i)
-
-            # Entropy changes for y marginals
-            for _, (b, nu_j, coeff) in y_updates.items():
-                print("b: ", b, ", nu_j: ", nu_j, ", coeff: ", coeff)
-                d = coeff * theta
-                print("y update: ", (Up(b + d, p) - Up(b, p)) * nu_j)
-            return 0
     
     return theta
 
@@ -651,6 +653,9 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
     
     if isinstance(result, tuple):
         gammak, i_FW, j_FW, i_AFW, j_AFW = result
+
+        print("gamma_max: ", gamma_max, ", Armijo step: ", gammak)
+        
     else:
         gammak = result
         i_FW, j_FW, i_AFW, j_AFW = -1, -1, -1, -1
@@ -705,7 +710,7 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
     grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, c, p, n, R)
 
     for k in range(max_iter):
-        #print(k)
+        print("\n Iteration trunc: ", k)
         # LMO call
         vk_x = LMO_x(xk, grad_xk_x, M, eps)
         vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)

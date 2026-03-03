@@ -193,7 +193,14 @@ Parameters:
 def armijo(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma = 0.5):
   # get the indices of the selected FW and AFW vertices
   FW_i, FW_j, AFW_i, AFW_j = v
+  print("FW_i, FW_j, AFW_i, AFW_j: ", FW_i, FW_j, AFW_i, AFW_j)
 
+  if FW_i != -1:
+    print("grad_UOT[FW_i, FW_j]: ", grad_UOT[FW_i, FW_j])
+  if AFW_i != -1:
+    print("grad_UOT[AFW_i, AFW_j]: ", grad_UOT[AFW_i, AFW_j])
+    
+  print("Initial theta: ", theta)
   if FW_i != -1:
     inner = grad_UOT[FW_i, FW_j]
     if AFW_i != -1:
@@ -202,6 +209,11 @@ def armijo(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gam
               (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j] + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
               + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
       while diff > beta*theta*inner:
+        print("diff: ", diff, ", beta*theta*inner: ", beta*theta*inner)
+        print("x update FW: ", (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p)) * mu[FW_i])
+        print("x update AFW: ", (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p)) * mu[AFW_i])
+        print("y update FW: ", (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p)) * nu[FW_j])
+        print("y update AFW: ", (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p)) * nu[AFW_j])
         theta = gamma * theta
         diff = (theta * (c[FW_i, FW_j] - c[AFW_i, AFW_j]) + (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p))*mu[FW_i] +
                 (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j] + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
@@ -210,6 +222,9 @@ def armijo(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gam
       diff = (theta*c[FW_i, FW_j] + (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p))*mu[FW_i] +
               (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j])
       while diff > beta*theta*inner:
+        print("diff: ", diff, ", beta*theta*inner: ", beta*theta*inner)
+        print("x update FW: ", (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p)) * mu[FW_i])
+        print("y update FW: ", (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p)) * nu[FW_j])
         theta = gamma * theta
         diff = (theta*c[FW_i, FW_j] + (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p))*mu[FW_i] +
                 (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j])
@@ -219,6 +234,9 @@ def armijo(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gam
       diff = (- theta * c[AFW_i, AFW_j] + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
               + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
       while diff > beta*theta*inner:
+        print("diff: ", diff, ", beta*theta*inner: ", beta*theta*inner)
+        print("x update AFW: ", (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p)) * mu[AFW_i])
+        print("y update AFW: ", (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p)) * nu[AFW_j])
         theta = gamma * theta
         diff = (- theta * c[AFW_i, AFW_j] + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
                 + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
@@ -320,6 +338,8 @@ def apply_step(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, c, p):
     xk[FW_i, FW_j] += gammak
     x_marg[FW_i] += gammak / mu[FW_i]
     y_marg[FW_j] += gammak / nu[FW_j]
+
+  print("gamma0: ", gamma0, ", Armijo step: ", gammak)
   
   return xk, x_marg, y_marg
 
@@ -346,6 +366,7 @@ def PW_FW_dim1(mu, nu, M, p, c,
   sum_term = np.sum(grad_xk * xk)
 
   for k in range(max_iter):
+    print("\n Iteration vanilla: ", k)
     # search direction
     vk = LMO(xk, grad_xk, M, eps)
 

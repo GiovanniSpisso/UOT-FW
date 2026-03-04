@@ -7,7 +7,7 @@ Parameters:
   p: main parameter that defines the p-entropy
 '''
 def Up(x, p):
-    x = np.ma.maximum(x, 0)
+    x = np.maximum(x, 0)
     
     if p == 1:
         # For x == 0: result = 1 (limit)
@@ -715,3 +715,4 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
                                                  mask1, mask2, p, n, R, v_coords, vk_s)
 
     print("FW_1dim_trunc converged after: ", max_iter, " iterations ")
+    return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

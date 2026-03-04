@@ -1,11 +1,10 @@
 Problemi da risolvere e cose da fare
 
-1.  trunc_1dim_0: ancora da sistemare np.ma + Armijo!
+1.  trunc_1dim_0: ancora da sistemare Armijo! + da capire se np.floaat(32) è meglio o no...
+    FW_trunc_1dim ha stepsize di nuovo a 0...
     Sistemo codici 2 dimensionali (np.ma, Armijo, controlla check eps nelle coordinate, LMO trunc, max_stepsize).
-    Metto np.float(32) nei vari codici.
+    Metto np.float(32) nei vari codici (serve?)
     Cambio max_step in tutti i codici (nota: per p particolari si può migliorare)
-
-    Codice per FW_trunc_1dim sembra funzionante
 
     CAPIRE: R... come meglio prenderlo? Sembra che una via di mezzo sia la cosa migliore...
             

@@ -442,6 +442,30 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
         
         if theta < 1e-10:
             # If theta is too small, we can stop to avoid numerical issues
+            if FW_x != -1: 
+                print("i_FW =", i_FW, "j_FW =", j_FW)
+                print("grad_x[FW_x] =", grad_x[FW_x])
+                print("x_marg =", x_marg[i_FW] + s_i[i_FW])
+                print("y_marg =", y_marg[j_FW] + s_j[j_FW])
+            if AFW_x != -1:  
+                print("i_AFW =", i_AFW, "j_AFW =", j_AFW)
+                print("grad_x[AFW_x] =", grad_x[AFW_x])
+                print("x_marg =", x_marg[i_AFW] + s_i[i_AFW])
+                print("y_marg =", y_marg[j_AFW] + s_j[j_AFW])
+            if FW_si != -1:  
+                print("FW_si =", FW_si)
+                print("FW_sj =", FW_sj)
+                print("grad_si[FW_si] =", grad_si[FW_si])
+                print("grad_sj[FW_sj] =", grad_sj[FW_sj])
+                print("x_marg =", x_marg[FW_si] + s_i[FW_si])
+                print("y_marg =", y_marg[FW_sj] + s_j[FW_sj])
+            if AFW_si != -1: 
+                print("AFW_si =", AFW_si)
+                print("AFW_sj =", AFW_sj)
+                print("grad_si[AFW_si] =", grad_si[AFW_si])
+                print("grad_sj[AFW_sj] =", grad_sj[AFW_sj])
+                print("x_marg =", x_marg[AFW_si] + s_i[AFW_si])
+                print("y_marg =", y_marg[AFW_sj] + s_j[AFW_sj])
             return 0
 
         theta *= gamma
@@ -627,6 +651,9 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
         gammak = result
         i_FW, j_FW, i_AFW, j_AFW = -1, -1, -1, -1
 
+    if gammak == 0:
+        return 0
+    
     # Update x coordinates
     if AFW_x != -1:
         xk[AFW_x] -= gammak
@@ -677,6 +704,7 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
     grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, c, p, n, R)
 
     for k in range(max_iter):
+        print(k)
         # LMO call
         vk_x = LMO_x(xk, grad_xk_x, M, eps)
         vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)

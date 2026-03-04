@@ -11,11 +11,11 @@ def Up(x, p):
     
     if p == 1:
         # For x == 0: result = 1 (limit)
-        result = np.ones_like(x, dtype=np.float32)
+        result = np.ones_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = x[mask_nonzero] * np.log(x[mask_nonzero]) - x[mask_nonzero] + 1
     elif p == 0:
-        result = np.ones_like(x, dtype=np.float32)
+        result = np.ones_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = x[mask_nonzero] - 1 - np.log(x[mask_nonzero])
     else:
@@ -35,11 +35,11 @@ def dUp_dx(x, p):
     
     # For x == 0: return 0 (limit of derivative)
     if p == 1:
-        result = np.zeros_like(x, dtype=np.float32)
+        result = np.zeros_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = np.log(x[mask_nonzero])
     elif p < 1:
-        result = np.zeros_like(x, dtype=np.float32)
+        result = np.zeros_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = (x[mask_nonzero]**(p-1) - 1) / (p - 1)
     else:
@@ -194,7 +194,7 @@ Parameters:
     p: main parameter that defines the p-entropy
 '''
 def x_init_trunc(mu, nu, n, c, p):
-    diag = np.zeros(n, dtype=np.float32)
+    diag = np.zeros(n)
     if p == 2:
         diag = 2 * mu * nu / (mu + nu)
     elif p == 1:
@@ -205,7 +205,7 @@ def x_init_trunc(mu, nu, n, c, p):
         diag = ((mu * nu) / (mu**(p-1) + nu**(p-1))**(1/(p-1))) * 2**(1/(p-1))
 
     # locate main diagonal (k=0) in the vector
-    x = np.zeros(len(c), dtype=np.float32)
+    x = np.zeros(len(c))
     x[c == 0] = diag
     x_marg = diag / mu
     y_marg = diag / nu
@@ -226,7 +226,7 @@ Parameters:
 def grad_trunc(x_marg, y_marg, c, p, n, R):
     dx = dUp_dx(x_marg, p)
     dy = dUp_dx(y_marg, p)
-    grad_x = np.zeros_like(c, dtype=np.float32)
+    grad_x = np.zeros_like(c)
     
     pos = 0
     for k in range(-R + 1, R):
@@ -700,7 +700,7 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
     # transportation plan, marginals, cost and gradient initialization
     xk, x_marg, y_marg = x_init_trunc(mu, nu, n, c, p)
 
-    s_i, s_j = np.zeros(n, dtype=np.float32), np.zeros(n, dtype=np.float32)
+    s_i, s_j = np.zeros(n), np.zeros(n)
     grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, c, p, n, R)
 
     for k in range(max_iter):

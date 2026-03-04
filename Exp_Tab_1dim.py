@@ -11,14 +11,14 @@ np.set_printoptions(precision=3, suppress=True)
 # ──────────────────────────────────────────────
 # Parameters
 # ──────────────────────────────────────────────
-n        = 5
-max_iter = 2
-R        = 5
+n        = 500
+max_iter = 10000
+R        = 10
 p        = 1
 delta    = 0.001
-eps      = 0.00001
+eps      = 0.001
 
-np.random.seed(0)
+np.random.seed(1)
 mu = np.random.randint(1, 1000, size=n)
 nu = np.random.randint(1, 1000, size=n)
 M  = n * (np.sum(mu) + np.sum(nu))
@@ -48,7 +48,7 @@ def run_FW_1dim():
 def run_FW_1dim_p2():
     t0 = time.time()
     xk, grad, x_marg, y_marg = PW_FW_dim1_p2(mu, nu, M,
-                                              max_iter=max_iter, delta=delta, eps=eps)
+                                             max_iter=max_iter, delta=delta, eps=eps)
     elapsed = time.time() - t0
     cost = cost_p2(xk, x_marg, y_marg, mu, nu)
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg,
@@ -57,7 +57,7 @@ def run_FW_1dim_p2():
 def run_FW_1dim_p1_5():
     t0 = time.time()
     xk, grad, x_marg, y_marg = PW_FW_dim1_p1_5(mu, nu, M,
-                                                max_iter=max_iter, delta=delta, eps=eps)
+                                               max_iter=max_iter, delta=delta, eps=eps)
     elapsed = time.time() - t0
     cost = cost_p1_5(xk, x_marg, y_marg, mu, nu)
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg,
@@ -90,11 +90,11 @@ def run_POT():
 # Comment out any line to skip that solver entirely.
 # ──────────────────────────────────────────────
 results = {}
-results['FW_1dim']       = run_FW_1dim()
+#results['FW_1dim']       = run_FW_1dim()
 #results['FW_1dim_p2']    = run_FW_1dim_p2()
 #results['FW_1dim_p1_5']  = run_FW_1dim_p1_5()
 results['FW_1dim_trunc'] = run_FW_1dim_trunc()
-#results['POT']           = run_POT()
+results['POT']           = run_POT()
 
 # ──────────────────────────────────────────────
 # PRINT RESULTS

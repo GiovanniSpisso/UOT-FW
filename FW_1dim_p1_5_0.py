@@ -285,34 +285,57 @@ def armijo_p1_5(x_marg, y_marg, grad, mu, nu, v, p, coords, theta = 1, beta = 0.
   def cost_ij(ii, jj):
     return float(abs(ii - jj))
 
-  if FW_i != -1:
-    inner = grad[FW]
-    if AFW_i != -1:
-      inner -= grad[AFW]
-      diff = (theta * (cost_ij(FW_i, FW_j) - cost_ij(AFW_i, AFW_j)) + (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p))*mu[FW_i] +
-              (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j] + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
-              + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
-      while diff > beta*theta*inner:
-        theta = gamma * theta
-        diff = (theta * (cost_ij(FW_i, FW_j) - cost_ij(AFW_i, AFW_j)) + (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p))*mu[FW_i] +
-                (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j] + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
-                + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
-    else:
-      diff = (theta*cost_ij(FW_i, FW_j) + (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p))*mu[FW_i] +
-              (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j])
-      while diff > beta*theta*inner:
-        theta = gamma * theta
-        diff = (theta*cost_ij(FW_i, FW_j) + (Up(x_marg[FW_i] + theta/mu[FW_i], p) - Up(x_marg[FW_i], p))*mu[FW_i] +
-                (Up(y_marg[FW_j] + theta/nu[FW_j], p) - Up(y_marg[FW_j], p))*nu[FW_j])
+  x_updates = {} 
+  y_updates = {}
 
-  elif AFW_i != -1:
-      inner = -grad[AFW]
-      diff = (- theta * cost_ij(AFW_i, AFW_j) + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
-              + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
-      while diff > beta*theta*inner:
-        theta = gamma * theta
-        diff = (- theta * cost_ij(AFW_i, AFW_j) + (Up(x_marg[AFW_i] - theta/mu[AFW_i], p) - Up(x_marg[AFW_i], p))*mu[AFW_i]
-                + (Up(y_marg[AFW_j] - theta/nu[AFW_j], p) - Up(y_marg[AFW_j], p))*nu[AFW_j])
+  def add_x(i, coeff):
+    if i in x_updates:
+        x0, mu0, coeff0 = x_updates[i]
+        x_updates[i] = (x0, mu0, coeff0 + coeff)
+    else:
+        x = x_marg[i]
+        x_updates[i] = (x, mu[i], coeff)
+
+  def add_y(j, coeff):
+    if j in y_updates:
+        y0, nu0, coeff0 = y_updates[j]
+        y_updates[j] = (y0, nu0, coeff0 + coeff)
+    else:
+        y = y_marg[j]
+        y_updates[j] = (y, nu[j], coeff)
+
+  inner = 0
+  cost_lin = 0
+  if FW != -1:
+    inner += grad[FW]
+    add_x(FW_i, 1)
+    add_y(FW_j, 1)
+    cost_lin += cost_ij(FW_i, FW_j)
+  if AFW != -1:
+    inner -= grad[AFW]
+    add_x(AFW_i, -1)
+    add_y(AFW_j, -1)
+    cost_lin -= cost_ij(AFW_i, AFW_j)
+
+  def obj_change(theta_val):
+    diff = theta_val * cost_lin
+
+    # Entropy changes for x marginals
+    for _, (x, mu_i, coeff) in x_updates.items():
+      d = coeff * theta_val / mu_i
+      diff += (Up(x + d, p) - Up(x, p)) * mu_i
+
+    # Entropy changes for y marginals
+    for _, (y, nu_j, coeff) in y_updates.items():
+      d = coeff * theta_val / nu_j
+      diff += (Up(y + d, p) - Up(y, p)) * nu_j
+
+    return diff
+    
+  diff = obj_change(theta)
+  while diff > beta * theta * inner:
+    theta = gamma * theta
+    diff = obj_change(theta)
 
   return theta
 

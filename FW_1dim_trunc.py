@@ -95,6 +95,17 @@ def UOT_cost_upper(cost_trunc, n, si, R, mu):
   return cost_trunc + K * np.sum(si * mu)
 
 
+'''
+    Convert a vector representation of a banded matrix back to full matrix form.
+    
+    Parameters:
+      vec: 1D array representing the banded matrix
+      n: dimension of the matrix (n x n)
+      R: truncation radius (diagonals from -R to R)
+    
+    Returns:
+      matrix: Full n x n matrix
+    '''
 def vector_to_matrix(vec, n, R):
     matrix = np.zeros((n, n))
     pos = 0
@@ -256,7 +267,7 @@ def LMO_x(pi, grad_x, M, eps):
         FW_x = -1
         
     # Away Frank-Wolfe direction
-    mask = (pi > eps * 0.1)
+    mask = (pi > eps)
     
     if not np.any(mask):
         return (FW_x, -1)
@@ -292,8 +303,8 @@ def LMO_s(si, sj, grad_s, M, eps, mu, nu):
     else:
         FW_si, FW_sj = -1, -1
     
-    mask_si = (si > eps * 0.1)
-    mask_sj = (sj > eps * 0.1)
+    mask_si = (si > eps)
+    mask_sj = (sj > eps)
     if not np.any(mask_si) and not np.any(mask_sj):
         return (FW_si, FW_sj, -1, -1)
     else:
@@ -361,26 +372,24 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     grad_si, grad_sj = grad_s
 
-    print("i_FW, j_FW, i_AFW, j_AFW: ", v_coords)
-
     x_updates = {}  # i -> (a_i, mu_i, coeff) where coeff multiplies theta in delta: delta = coeff * theta
     y_updates = {}  # j -> (b_j, nu_j, coeff)
 
     def add_x(i, coeff):
         if i in x_updates:
-            a0, mu0, coeff0 = x_updates[i]
-            x_updates[i] = (a0, mu0, coeff0 + coeff)
+            x0, mu0, coeff0 = x_updates[i]
+            x_updates[i] = (x0, mu0, coeff0 + coeff)
         else:
-            a = x_marg[i] + s_i[i]
-            x_updates[i] = (a, mu[i], coeff)
+            x = x_marg[i] + s_i[i]
+            x_updates[i] = (x, mu[i], coeff)
 
     def add_y(j, coeff):
         if j in y_updates:
-            b0, nu0, coeff0 = y_updates[j]
-            y_updates[j] = (b0, nu0, coeff0 + coeff)
+            y0, nu0, coeff0 = y_updates[j]
+            y_updates[j] = (y0, nu0, coeff0 + coeff)
         else:
-            b = y_marg[j] + s_j[j]
-            y_updates[j] = (b, nu[j], coeff)
+            y = y_marg[j] + s_j[j]
+            y_updates[j] = (y, nu[j], coeff)
 
     # Directional derivative <grad, d> + 
     # Contributions to marginals from x-plan FW/AFW (these affect x_marg at i_* and y_marg at j_*) +
@@ -390,69 +399,51 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     penalty_lin = 0.0   # Constant linear coefficient for R penalty
     if FW_x != -1: 
         inner += grad_x[FW_x]
-        add_x(i_FW, +1.0 / mu[i_FW])
-        add_y(j_FW, +1.0 / nu[j_FW])
+        add_x(i_FW, +1.0)
+        add_y(j_FW, +1.0)
         cost_lin += c[FW_x]
     if AFW_x != -1:  
         inner -= grad_x[AFW_x]
-        add_x(i_AFW, -1.0 / mu[i_AFW])
-        add_y(j_AFW, -1.0 / nu[j_AFW])
+        add_x(i_AFW, -1.0)
+        add_y(j_AFW, -1.0)
         cost_lin -= c[AFW_x]
     if FW_si != -1:  
         inner += grad_si[FW_si]
         inner += grad_sj[FW_sj]
-        add_x(FW_si, +1.0 / mu[FW_si])
-        add_y(FW_sj, +1.0 / nu[FW_sj])
+        add_x(FW_si, +1.0)
+        add_y(FW_sj, +1.0)
         penalty_lin += R
     if AFW_si != -1: 
         inner -= grad_si[AFW_si]
         inner -= grad_sj[AFW_sj]
-        add_x(AFW_si, -1.0 / mu[AFW_si])
-        add_y(AFW_sj, -1.0 / nu[AFW_sj])
+        add_x(AFW_si, -1.0)
+        add_y(AFW_sj, -1.0)
         penalty_lin -= R
         
     def obj_change(theta_val):
         diff = theta_val * (cost_lin + penalty_lin)
 
         # Entropy changes for x marginals
-        for _, (a, mu_i, coeff) in x_updates.items():
-            d = coeff * theta_val
-            diff += (Up(a + d, p) - Up(a, p)) * mu_i
+        for _, (x, mu_i, coeff) in x_updates.items():
+            d = coeff * theta_val / mu_i
+            diff += (Up(x + d, p) - Up(x, p)) * mu_i
 
         # Entropy changes for y marginals
-        for _, (b, nu_j, coeff) in y_updates.items():
-            d = coeff * theta_val
-            diff += (Up(b + d, p) - Up(b, p)) * nu_j
+        for _, (y, nu_j, coeff) in y_updates.items():
+            d = coeff * theta_val / nu_j
+            diff += (Up(y + d, p) - Up(y, p)) * nu_j
 
         return diff
 
     # Backtracking
     diff = obj_change(theta)
-    print("theta init: ", theta)
-    if FW_x != -1:
-        print("grad_x[FW_x]: ", grad_x[FW_x], ", cost_lin: ", cost_lin)
-    if FW_si != -1:
-        print("grad_si[FW_si]: ", grad_si[FW_si], ", penalty_lin: ", penalty_lin)
-    if AFW_x != -1:
-        print("grad_x[AFW_x]: ", grad_x[AFW_x])
-    if AFW_si != -1:
-        print("grad_si[AFW_si]: ", grad_si[AFW_si])
     while diff > beta * theta * inner:
-        print("beta: ", beta, ", theta: ", theta, ", inner: ", inner)
-        print("diff: ", diff, ", beta*theta*inner: ", beta*theta*inner)
         diff = theta * (cost_lin + penalty_lin)
-        print("diff without entropy: ", diff)
-        # Entropy changes for x marginals
-        for _, (a, mu_i, coeff) in x_updates.items():
-            #print("x_marg: ", a, ", mu_i: ", mu_i, ", coeff: ", coeff)
-            d = coeff * theta
-            print("x update: ", (Up(a + d, p) - Up(a, p)) * mu_i)
-        # Entropy changes for y marginals
-        for _, (b, nu_j, coeff) in y_updates.items():
-            #print("y_marg: ", b, ", nu_j: ", nu_j, ", coeff: ", coeff)
-            d = coeff * theta
-            print("y update: ", (Up(b + d, p) - Up(b, p)) * nu_j)
         
+        if theta < 1e-10:
+            # If theta is too small, we can stop to avoid numerical issues
+            return 0
+
         theta *= gamma
         diff = obj_change(theta)
     
@@ -629,32 +620,8 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
                       mu, nu, vk_x, vk_s, s_i, s_j, c, p, n, R, 
                       theta = gamma_max)
     
-    ######################################################
-    # to delete
-    if result[0] == 0:
-        print("gamma_max init: ", gamma_max)
-        FW_x, AFW_x = vk_x
-        FW_si, FW_sj, AFW_si, AFW_sj = vk_s
-        if FW_x != -1:
-            print("x[FW_x]: ", xk[FW_x])
-        if AFW_x != -1:
-            print("x[AFW_x]: ", xk[AFW_x])
-        if FW_si != -1:
-            print("si[FW_si]: ", s_i[FW_si])
-        if AFW_si != -1:
-            print("si[AFW_si]: ", s_i[AFW_si])
-        if FW_sj != -1:
-            print("sj[FW_sj]: ", s_j[FW_sj])
-        if AFW_sj != -1:
-            print("sj[AFW_sj]: ", s_j[AFW_sj])
-        return 0
-        #raise ValueError("Armijo returned zero step size")
-    ######################################################
-    
     if isinstance(result, tuple):
         gammak, i_FW, j_FW, i_AFW, j_AFW = result
-
-        print("gamma_max: ", gamma_max, ", Armijo step: ", gammak)
         
     else:
         gammak = result
@@ -710,7 +677,6 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
     grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, c, p, n, R)
 
     for k in range(max_iter):
-        print("\n Iteration trunc: ", k)
         # LMO call
         vk_x = LMO_x(xk, grad_xk_x, M, eps)
         vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)

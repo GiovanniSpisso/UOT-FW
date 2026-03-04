@@ -284,7 +284,7 @@ def LMO_x(pi, grad_x, M, eps):
         FW_x = -1
 
     # Away Frank-Wolfe direction
-    mask = (pi > eps)
+    mask = (pi > 0)
 
     if not np.any(mask):
         return (FW_x, -1)
@@ -311,12 +311,16 @@ Parameters:
     M: upper bound for generalized simplex
     eps: direction tolerance
     mu, nu: measures 
+    mask1, mask2: masks
 '''
-def LMO_s(si, sj, grad_s, M, eps, mu, nu):
+def LMO_s(si, sj, grad_s, M, eps, mu, nu, mask1, mask2):
+    # FW: restrict minimum search to valid entries only (masked by mask1/mask2)
+    grad_si_fw = np.where(mask1, grad_s[0], np.inf)
+    grad_sj_fw = np.where(mask2, grad_s[1], np.inf)
 
-    if (grad_s[0].min() + grad_s[1].min()) < -eps:
-        FW_si = int(np.argmin(grad_s[0]))
-        FW_sj = int(np.argmin(grad_s[1]))
+    if (grad_si_fw.min() + grad_sj_fw.min()) < -eps:
+        FW_si = int(np.argmin(grad_si_fw))
+        FW_sj = int(np.argmin(grad_sj_fw))
     else:
         FW_si, FW_sj = -1, -1
 
@@ -696,7 +700,7 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
     for k in range(max_iter):
         # LMO call
         vk_x = LMO_x(xk, grad_xk_x, M, eps)
-        vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)
+        vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu, mask1, mask2)
 
         # gap calculation
         gap = gap_calc_trunc(xk, grad_xk_x, vk_x, M, s_i, s_j, grad_xk_s, vk_s, mu, nu)

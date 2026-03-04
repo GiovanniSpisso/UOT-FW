@@ -369,7 +369,6 @@ def PW_FW_dim1(mu, nu, M, p, c,
   sum_term = np.sum(grad_xk * xk)
 
   for k in range(max_iter):
-    print(k)
     # search direction
     vk = LMO(xk, grad_xk, M, eps)
 

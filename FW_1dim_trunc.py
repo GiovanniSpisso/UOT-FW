@@ -194,7 +194,7 @@ Parameters:
     p: main parameter that defines the p-entropy
 '''
 def x_init_trunc(mu, nu, n, c, p):
-    diag = np.zeros(n)
+    diag = np.zeros(n, dtype=float)
     if p == 2:
         diag = 2 * mu * nu / (mu + nu)
     elif p == 1:
@@ -205,7 +205,7 @@ def x_init_trunc(mu, nu, n, c, p):
         diag = ((mu * nu) / (mu**(p-1) + nu**(p-1))**(1/(p-1))) * 2**(1/(p-1))
 
     # locate main diagonal (k=0) in the vector
-    x = np.zeros(len(c))
+    x = np.zeros(len(c), dtype=float)
     x[c == 0] = diag
     x_marg = diag / mu
     y_marg = diag / nu
@@ -226,7 +226,7 @@ Parameters:
 def grad_trunc(x_marg, y_marg, c, p, n, R):
     dx = dUp_dx(x_marg, p)
     dy = dUp_dx(y_marg, p)
-    grad_x = np.zeros_like(c)
+    grad_x = np.zeros_like(c, dtype=float)
     
     pos = 0
     for k in range(-R + 1, R):
@@ -267,7 +267,7 @@ def LMO_x(pi, grad_x, M, eps):
         FW_x = -1
         
     # Away Frank-Wolfe direction
-    mask = (pi > eps)
+    mask = (pi > 0)
     
     if not np.any(mask):
         return (FW_x, -1)
@@ -440,6 +440,7 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     while diff > beta * theta * inner:
         diff = theta * (cost_lin + penalty_lin)
         
+        # TO DELETE, JUST FOR DEBUGGING
         if theta < 1e-10:
             # If theta is too small, we can stop to avoid numerical issues
             if FW_x != -1: 
@@ -704,7 +705,6 @@ def PW_FW_dim1_trunc(mu, nu, M, p, R,
     grad_xk_x, grad_xk_s = grad_trunc(x_marg, y_marg, c, p, n, R)
 
     for k in range(max_iter):
-        print(k)
         # LMO call
         vk_x = LMO_x(xk, grad_xk_x, M, eps)
         vk_s = LMO_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)

@@ -1,14 +1,12 @@
-Problemi da risolvere e cose da fare
-
-1.  trunc_1dim_0: ancora da sistemare Armijo! + da capire se np.floaat(32) è meglio o no...
-    FW_trunc_1dim ha stepsize di nuovo a 0...
-    Sistemo codici 2 dimensionali (np.ma, Armijo, controlla check eps nelle coordinate, LMO trunc, max_stepsize).
-    Metto np.float(32) nei vari codici (serve?)
+1.  Sistemo codici 2 dimensionali (np.ma, Armijo, controlla check eps nelle coordinate, LMO trunc, max_stepsize).
     Cambio max_step in tutti i codici (nota: per p particolari si può migliorare)
 
     CAPIRE: R... come meglio prenderlo? Sembra che una via di mezzo sia la cosa migliore...
+            RICORDA DI TOGLIERE DEBUGGING IN ARMIJO FW_1dim_trunc
+            FW_trunc_1dim sembra aver risolto i problemi di stepsize, per ora... (nota: ho cambiato LMO_x, controlla continui a funzionare)
+            Ho tolto np.float(32) nei vari codici, rischiava di dare problemi numerici di approssimazione...
             
-    DA FARE: 2dim (p2, base, trunc) (con o senza np.ma?)
+    DA FARE: 2dim (p2, base, trunc)
     fai tabella :
     n = (provo con 100, 500, 1000, 1500...)
     p = 2,   dim 1: FW_non_sparse | FW_trunc | FW_p2
@@ -43,3 +41,6 @@ Idee grafi per esperimenti:
     Cost vs Time (a parità di tutti i parametri, si confrontano codici diversi)
     For 2 dimensional codes: mass transport with some images 
     esperimenti variando parametri: p, n, R (troncata / codice con p = 2, cosa di preciso?)   
+
+Da segnare nel draft:
+-   R molto piccolo non sempre equivale a R ottimo. A volte nel codice è meglio fare un trade-off

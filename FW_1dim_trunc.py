@@ -38,12 +38,12 @@ def dUp_dx(x, p):
         result = np.zeros_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = np.log(x[mask_nonzero])
-    elif p < 1:
+    elif p > 1:
+        result = (x**(p - 1) - 1) / (p - 1)
+    else: # p < 1
         result = np.zeros_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = (x[mask_nonzero]**(p-1) - 1) / (p - 1)
-    else:
-        result = (x**(p - 1) - 1) / (p - 1)
     
     return result
     
@@ -365,8 +365,8 @@ Parameters:
     R: truncation radius
     theta, beta, gamma: Armijo parameters
 '''
-def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
-           s_i, s_j, c, p, R, theta=1.0, beta=0.4, gamma=0.5):
+def armijo_trunc(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
+                 s_i, s_j, c, p, R, theta=1.0, beta=0.4, gamma=0.5):
     i_FW, j_FW, i_AFW, j_AFW = v_coords
     FW_x, AFW_x = vk_x
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
@@ -438,8 +438,6 @@ def armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s,
     # Backtracking
     diff = obj_change(theta)
     while diff > beta * theta * inner:
-        diff = theta * (cost_lin + penalty_lin)
-        
         # TO DELETE, JUST FOR DEBUGGING
         if theta < 1e-10:
             # If theta is too small, we can stop to avoid numerical issues
@@ -498,8 +496,8 @@ def step_calc(x_marg, y_marg, grad_x, grad_s,
         AFW_ix, AFW_jx = vector_index_to_matrix_indices(vk_x[1], n=n, R=R)
     v_coords = (FW_ix, FW_jx, AFW_ix, AFW_jx)
 
-    step = armijo(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s, 
-                  s_i, s_j, c, p, R, theta = theta, beta = beta, gamma = gamma)
+    step = armijo_trunc(x_marg, y_marg, grad_x, grad_s, mu, nu, v_coords, vk_x, vk_s, 
+                        s_i, s_j, c, p, R, theta = theta, beta = beta, gamma = gamma)
     return step, FW_ix, FW_jx, AFW_ix, AFW_jx
 
 

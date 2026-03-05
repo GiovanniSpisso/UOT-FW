@@ -1,5 +1,7 @@
-1.  Sistemo codici 2 dimensionali (np.ma, Armijo, controlla check eps nelle coordinate, LMO trunc, max_stepsize).
-    Cambio max_step in tutti i codici (nota: per p particolari si può migliorare)
+1.  Cambio max_step in tutti i codici (nota: per p particolari si può migliorare)
+    Stampo i piani PW_FW + POT in n=1000 e vedi dove c'è la differenza
+    Prova OT unbalanced functions
+    Confronto con gradiente proiettato (p=2)
 
     CAPIRE: R... come meglio prenderlo? Sembra che una via di mezzo sia la cosa migliore...
             RICORDA DI TOGLIERE DEBUGGING IN ARMIJO FW_1dim_trunc

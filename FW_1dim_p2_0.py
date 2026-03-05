@@ -43,12 +43,9 @@ def cost_p2(pi, x_marg, y_marg, mu, nu):
   n = x_marg.shape[0]
   C1 = np.sum(pi[:n]) + np.sum(pi[2*n:3*n])
 
-  mask_x = (mu != 0)
-  mask_y = (nu != 0)
-
   # Compute entropy only on non-zero measure indices
-  cost_row = np.sum(mu[mask_x] * Up(x_marg[mask_x], 2))
-  cost_col = np.sum(nu[mask_y] * Up(y_marg[mask_y], 2))
+  cost_row = np.sum(mu * Up(x_marg, 2))
+  cost_col = np.sum(nu * Up(y_marg, 2))
 
   C2 = cost_row + cost_col
   return C1 + C2

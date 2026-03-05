@@ -38,9 +38,6 @@ Parameters:
   mu, nu: measures
 '''
 def cost_p1_5(pi, x_marg, y_marg, mu, nu):
-  mask_x = (mu != 0)
-  mask_y = (nu != 0)
-
   # pi is a 7n vector: [upper3 | upper2 | upper1 | main_diag | lower1 | lower2 | lower3]
   # cost is distance on off-diagonal, 0 on main diagonal
   n = x_marg.shape[0]
@@ -52,8 +49,8 @@ def cost_p1_5(pi, x_marg, y_marg, mu, nu):
   C1 += 1 * np.sum(pi[4*n:5*n]) + 2 * np.sum(pi[5*n:6*n]) + 3 * np.sum(pi[6*n:7*n])
 
   # Compute entropy only on non-zero measure indices
-  cost_row = np.sum(mu[mask_x] * Up(x_marg[mask_x], 1.5))
-  cost_col = np.sum(nu[mask_y] * Up(y_marg[mask_y], 1.5))
+  cost_row = np.sum(mu * Up(x_marg, 1.5))
+  cost_col = np.sum(nu * Up(y_marg, 1.5))
 
   C2 = cost_row + cost_col
   return C1 + C2

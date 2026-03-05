@@ -110,30 +110,35 @@ def x_init_dim2_p2(mu, nu, n):
   x_marg = np.zeros((n,n))
   y_marg = np.zeros((n,n))
 
+  mask1 = (mu != 0)
+  mask2 = (nu != 0)
+  mask = mask1 & mask2
+
   # Compute main diagonal values (indices in the first n^2 entries)
   diag_vals = np.zeros((n,n))
-  diag_vals = 2 * mu * nu / (mu + nu)
+  diag_vals[mask] = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
 
   x0[0] = diag_vals
   
-  x_marg = diag_vals / mu
-  y_marg = diag_vals / nu
+  x_marg[mask] = diag_vals[mask] / mu[mask]
+  y_marg[mask] = diag_vals[mask] / nu[mask]
   
-  return x0, x_marg, y_marg
+  return x0, x_marg, y_marg, mask1, mask2
 
 
 '''
 Function to define the gradient of UOT (only for p = 2)
 Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
+  mask1, mask2: masks for the zero coordinates
   n: sample points
 '''
-def grad_dim2_p2(x_marg, y_marg, n):
+def grad_dim2_p2(x_marg, y_marg, mask1, mask2, n):
     # Compute derivatives only where masks are true
     dx = np.zeros((n, n))
     dy = np.zeros((n, n))
-    dx = dUp_dx(x_marg, 2)
-    dy = dUp_dx(y_marg, 2)
+    dx[mask1] = dUp_dx(x_marg[mask1], 2)
+    dy[mask2] = dUp_dx(y_marg[mask2], 2)
 
     # Initialize 9 * n^2 gradient vector
     grad = np.zeros((9, n, n))
@@ -142,36 +147,45 @@ def grad_dim2_p2(x_marg, y_marg, n):
     # where (k,l) = (i,j) + offset[mat_idx]
 
     # Index 0
-    grad[0] = dx + dy  # cost = 0
+    m = mask1 & mask2
+    grad[0][m] = dx[m] + dy[m]  # cost = 0
 
     # Index 1: (i,j) → (i-1,j) [up]
     # Source: (i,j) with i ∈ [1,n-1]
     # Target: (i-1,j) = (k,j) with k ∈ [0,n-2]
-    grad[1][1:, :] = 1 + dx[1:, :] + dy[:-1, :]
+    m = mask1[1:, :] & mask2[:-1, :]
+    grad[1][1:, :][m] = 1 + dx[1:, :][m] + dy[:-1, :][m]
 
     # Index 2: (i,j) → (i,j-1) [left]
-    grad[2][:, 1:]= 1 + dx[:, 1:] + dy[:, :-1]
+    m = mask1[:, 1:] & mask2[:, :-1]
+    grad[2][:, 1:][m] = 1 + dx[:, 1:][m] + dy[:, :-1][m]
 
     # Index 3: (i,j) → (i+1,j) [down]
-    grad[3][:-1, :] = 1 + dx[:-1, :] + dy[1:, :]
+    m = mask1[:-1, :] & mask2[1:, :]
+    grad[3][:-1, :][m] = 1 + dx[:-1, :][m] + dy[1:, :][m]
 
     # Index 4: (i,j) → (i,j+1) [right]
-    grad[4][:, :-1] = 1 + dx[:, :-1] + dy[:, 1:]
+    m = mask1[:, :-1] & mask2[:, 1:]
+    grad[4][:, :-1][m] = 1 + dx[:, :-1][m] + dy[:, 1:][m]
 
     # Diagonal directions
     sqrt2 = np.sqrt(2)
     
     # Index 5: (i,j) → (i-1,j-1) [up-left]
-    grad[5][1:, 1:] = sqrt2 + dx[1:, 1:] + dy[:-1, :-1]
+    m = mask1[1:, 1:] & mask2[:-1, :-1]
+    grad[5][1:, 1:][m] = sqrt2 + dx[1:, 1:][m] + dy[:-1, :-1][m]
 
     # Index 6: (i,j) → (i+1,j-1) [down-left]
-    grad[6][:-1, 1:] = sqrt2 + dx[:-1, 1:] + dy[1:, :-1]
+    m = mask1[:-1, 1:] & mask2[1:, :-1]
+    grad[6][:-1, 1:][m] = sqrt2 + dx[:-1, 1:][m] + dy[1:, :-1][m]
 
     # Index 7: (i,j) → (i-1,j+1) [up-right]
-    grad[7][1:, :-1] = sqrt2 + dx[1:, :-1] + dy[:-1, 1:]
+    m = mask1[1:, :-1] & mask2[:-1, 1:]
+    grad[7][1:, :-1][m] = sqrt2 + dx[1:, :-1][m] + dy[:-1, 1:][m]
 
     # Index 8: (i,j) → (i+1,j+1) [down-right]
-    grad[8][:-1, :-1] = sqrt2 + dx[:-1, :-1] + dy[1:, 1:]
+    m = mask1[:-1, :-1] & mask2[1:, 1:]
+    grad[8][:-1, :-1][m] = sqrt2 + dx[:-1, :-1][m] + dy[1:, 1:][m]
 
     return grad
 
@@ -312,14 +326,16 @@ Parameters:
     x_marg: X marginals (n, n)
     y_marg: Y marginals (n, n)
     grad: Gradient in compact form (9, n, n)
+    mask1: Source mask (n, n)
+    mask2: Target mask (n, n)
     FW_full: (x1FW, x2FW, y1FW, y2FW) or (-1, -1, -1, -1)
     AFW_full: (x1AFW, x2AFW, y1AFW, y2AFW) or (-1, -1, -1, -1)
 '''
-def grad_update_dim2_p2(x_marg, y_marg, grad, FW_full, AFW_full):
+def grad_update_dim2_p2(x_marg, y_marg, grad, mask1, mask2, FW_full, AFW_full):
     n = grad.shape[1]
     
     def update_source_neighborhood(x1, x2, y1, y2):
-        """Update entries with source near (x1,x2), target at (y1,y2)."""        
+        """Update entries with source near (x1,x2), target at (y1,y2)."""
         # Compute derivative only once for target
         dy_val = dUp_dx(y_marg[y1, y2], 2)
         
@@ -328,7 +344,7 @@ def grad_update_dim2_p2(x_marg, y_marg, grad, FW_full, AFW_full):
             for dj in [-1, 0, 1]:
                 i, j = x1 + di, x2 + dj
                 
-                if not 0 <= i < n and 0 <= j < n:
+                if not (0 <= i < n and 0 <= j < n and mask1[i, j]):
                     continue
                 
                 offset = (y1 - i, y2 - j)
@@ -339,7 +355,7 @@ def grad_update_dim2_p2(x_marg, y_marg, grad, FW_full, AFW_full):
                     grad[mat_idx, i, j] = cost_ind_dim2_p2(mat_idx) + dx_val + dy_val
     
     def update_target_neighborhood(x1, x2, y1, y2):
-        """Update entries with source at (x1,x2), target near (y1,y2)."""        
+        """Update entries with source at (x1,x2), target near (y1,y2)."""
         # Compute derivative only once for source
         dx_val = dUp_dx(x_marg[x1, x2], 2)
         
@@ -348,7 +364,7 @@ def grad_update_dim2_p2(x_marg, y_marg, grad, FW_full, AFW_full):
             for dj in [-1, 0, 1]:
                 k, l = y1 + di, y2 + dj
                 
-                if not 0 <= k < n and 0 <= l < n:
+                if not (0 <= k < n and 0 <= l < n and mask2[k, l]):
                     continue
                 
                 offset = (k - x1, l - x2)
@@ -501,8 +517,8 @@ def PW_FW_dim2_p2(mu, nu, M,
   n = np.shape(mu)[0]
 
   # transportation plan, marginals and gradient initialization
-  xk, x_marg, y_marg = x_init_dim2_p2(mu, nu, n)
-  grad_xk = grad_dim2_p2(x_marg, y_marg, n)
+  xk, x_marg, y_marg, mask1, mask2 = x_init_dim2_p2(mu, nu, n)
+  grad_xk = grad_dim2_p2(x_marg, y_marg, mask1, mask2, n)
 
   # Initialize sum_term for efficient gap calculation
   sum_term = np.sum(grad_xk * xk)
@@ -526,7 +542,7 @@ def PW_FW_dim2_p2(mu, nu, M,
                                             comp_FW, full_FW, comp_AFW, full_AFW)
 
     # gradient update
-    grad_xk = grad_update_dim2_p2(x_marg, y_marg, grad_xk, full_FW, full_AFW)
+    grad_xk = grad_update_dim2_p2(x_marg, y_marg, grad_xk, mask1, mask2, full_FW, full_AFW)
     
     # Add back contributions from affected coordinates after gradient update
     sum_term = update_sum_term_dim2_p2(sum_term, grad_xk, xk, full_FW, full_AFW, n, sign=1)

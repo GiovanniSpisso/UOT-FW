@@ -40,8 +40,12 @@ def dUp_dx(x, p):
         result = np.zeros_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = np.log(x[mask_nonzero])
-    else:
+    elif p > 1:
         result = (x**(p - 1) - 1) / (p - 1)
+    else: # p < 1
+        result = np.zeros_like(x, dtype=float)
+        mask_nonzero = (x > 0)
+        result[mask_nonzero] = (x[mask_nonzero]**(p-1) - 1) / (p - 1)
     
     return result
 
@@ -74,7 +78,6 @@ Parameters:
   n: sample points
 '''
 def x_init_dim2(mu, nu, p, n):
-    den = mu + nu
     x = np.zeros((n, n, n, n))
     x_marg = np.zeros((n, n))
     y_marg = np.zeros((n, n))
@@ -84,7 +87,7 @@ def x_init_dim2(mu, nu, p, n):
     mask = mask1 & mask2
 
     if p == 2:
-        vals = 2 * mu[mask] * nu[mask] / den[mask]
+        vals = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
 
     elif p == 1:
         vals = np.sqrt(mu[mask] * nu[mask])
@@ -230,48 +233,60 @@ def armijo_dim2(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta=1, beta=0.4, ga
     # get the indices of the selected FW and AFW vertices
     (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = v
 
-    if x1FW != -1:
-        inner = grad_UOT[x1FW, x2FW, y1FW, y2FW]
-        if x1AFW != -1:
-            inner -= grad_UOT[x1AFW, x2AFW, y1AFW, y2AFW]
-            diff = (theta * (c[x1FW, x2FW, y1FW, y2FW] - c[x1AFW, x2AFW, y1AFW, y2AFW]) + 
-                    (Up(x_marg[x1FW, x2FW] + theta/mu[x1FW, x2FW], p) - Up(x_marg[x1FW, x2FW], p)) * mu[x1FW, x2FW] +
-                    (Up(y_marg[y1FW, y2FW] + theta/nu[y1FW, y2FW], p) - Up(y_marg[y1FW, y2FW], p)) * nu[y1FW, y2FW] + 
-                    (Up(x_marg[x1AFW, x2AFW] - theta/mu[x1AFW, x2AFW], p) - Up(x_marg[x1AFW, x2AFW], p)) * mu[x1AFW, x2AFW] +
-                    (Up(y_marg[y1AFW, y2AFW] - theta/nu[y1AFW, y2AFW], p) - Up(y_marg[y1AFW, y2AFW], p)) * nu[y1AFW, y2AFW])
-            
-            while diff > beta * theta * inner:
-                theta = gamma * theta
-                diff = (theta * (c[x1FW, x2FW, y1FW, y2FW] - c[x1AFW, x2AFW, y1AFW, y2AFW]) + 
-                        (Up(x_marg[x1FW, x2FW] + theta/mu[x1FW, x2FW], p) - Up(x_marg[x1FW, x2FW], p)) * mu[x1FW, x2FW] +
-                        (Up(y_marg[y1FW, y2FW] + theta/nu[y1FW, y2FW], p) - Up(y_marg[y1FW, y2FW], p)) * nu[y1FW, y2FW] + 
-                        (Up(x_marg[x1AFW, x2AFW] - theta/mu[x1AFW, x2AFW], p) - Up(x_marg[x1AFW, x2AFW], p)) * mu[x1AFW, x2AFW] +
-                        (Up(y_marg[y1AFW, y2AFW] - theta/nu[y1AFW, y2AFW], p) - Up(y_marg[y1AFW, y2AFW], p)) * nu[y1AFW, y2AFW])
-        else:
-            diff = (theta * c[x1FW, x2FW, y1FW, y2FW] + 
-                    (Up(x_marg[x1FW, x2FW] + theta/mu[x1FW, x2FW], p) - Up(x_marg[x1FW, x2FW], p)) * mu[x1FW, x2FW] +
-                    (Up(y_marg[y1FW, y2FW] + theta/nu[y1FW, y2FW], p) - Up(y_marg[y1FW, y2FW], p)) * nu[y1FW, y2FW])
-            
-            while diff > beta * theta * inner:
-                theta = gamma * theta
-                diff = (theta * c[x1FW, x2FW, y1FW, y2FW] + 
-                        (Up(x_marg[x1FW, x2FW] + theta/mu[x1FW, x2FW], p) - Up(x_marg[x1FW, x2FW], p)) * mu[x1FW, x2FW] +
-                        (Up(y_marg[y1FW, y2FW] + theta/nu[y1FW, y2FW], p) - Up(y_marg[y1FW, y2FW], p)) * nu[y1FW, y2FW])
+    x_updates = {} 
+    y_updates = {}
 
-    elif x1AFW != -1:
-        inner = -grad_UOT[x1AFW, x2AFW, y1AFW, y2AFW]
-        diff = (-theta * c[x1AFW, x2AFW, y1AFW, y2AFW] + 
-                (Up(x_marg[x1AFW, x2AFW] - theta/mu[x1AFW, x2AFW], p) - Up(x_marg[x1AFW, x2AFW], p)) * mu[x1AFW, x2AFW] +
-                (Up(y_marg[y1AFW, y2AFW] - theta/nu[y1AFW, y2AFW], p) - Up(y_marg[y1AFW, y2AFW], p)) * nu[y1AFW, y2AFW])
-        
-        while diff > beta * theta * inner:
-            theta = gamma * theta
-            diff = (-theta * c[x1AFW, x2AFW, y1AFW, y2AFW] + 
-                    (Up(x_marg[x1AFW, x2AFW] - theta/mu[x1AFW, x2AFW], p) - Up(x_marg[x1AFW, x2AFW], p)) * mu[x1AFW, x2AFW] +
-                    (Up(y_marg[y1AFW, y2AFW] - theta/nu[y1AFW, y2AFW], p) - Up(y_marg[y1AFW, y2AFW], p)) * nu[y1AFW, y2AFW])
+    def add_x(i, coeff):
+      if i in x_updates:
+          x0, mu0, coeff0 = x_updates[i]
+          x_updates[i] = (x0, mu0, coeff0 + coeff)
+      else:
+          x = x_marg[i]
+          x_updates[i] = (x, mu[i], coeff)
+
+    def add_y(j, coeff):
+      if j in y_updates:
+          y0, nu0, coeff0 = y_updates[j]
+          y_updates[j] = (y0, nu0, coeff0 + coeff)
+      else:
+          y = y_marg[j]
+          y_updates[j] = (y, nu[j], coeff)
+
+    inner = 0
+    cost_lin = 0
+    if x1FW != -1:
+      inner += grad_UOT[x1FW, x2FW, y1FW, y2FW]
+      add_x((x1FW, x2FW), 1)
+      add_y((y1FW, y2FW), 1)
+      cost_lin += c[x1FW, x2FW, y1FW, y2FW]
+    if x1AFW != -1:
+      inner -= grad_UOT[x1AFW, x2AFW, y1AFW, y2AFW]
+      add_x((x1AFW, x2AFW), -1)
+      add_y((y1AFW, y2AFW), -1)
+      cost_lin -= c[x1AFW, x2AFW, y1AFW, y2AFW]
+
+    def obj_change(theta_val):
+      diff = theta_val * cost_lin
+
+      # Entropy changes for x marginals
+      for _, (x, mu_i, coeff) in x_updates.items():
+        d = coeff * theta_val / mu_i
+        diff += (Up(x + d, p) - Up(x, p)) * mu_i
+
+      # Entropy changes for y marginals
+      for _, (y, nu_j, coeff) in y_updates.items():
+        d = coeff * theta_val / nu_j
+        diff += (Up(y + d, p) - Up(y, p)) * nu_j
+
+      return diff
+    
+    diff = obj_change(theta)
+    while diff > beta * theta * inner:
+      theta = gamma * theta
+      diff = obj_change(theta)
 
     return theta
-
+    
 
 '''
 Stepsize calculation
@@ -386,7 +401,7 @@ def apply_step_dim2(xk, x_marg, y_marg, grad_xk, mu, nu, M, v, c, p):
       x_marg[x1FW, x2FW] += gammak / mu[x1FW, x2FW]
       y_marg[y1FW, y2FW] += gammak / nu[y1FW, y2FW]
   else:
-    theta = M - np.sum(xk) + xk[x1FW, x2FW, y1FW, y2FW]
+    theta = min(max(np.max(mu), np.max(nu)), M - np.sum(xk) + xk[x1FW, x2FW, y1FW, y2FW])
     gammak = step_calc_dim2(x_marg, y_marg, grad_xk, mu, nu, v, c, p, theta=theta)
 
     xk[x1FW, x2FW, y1FW, y2FW] += gammak

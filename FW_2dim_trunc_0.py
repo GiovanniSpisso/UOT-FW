@@ -134,22 +134,27 @@ def x_init_trunc_dim2(mu, nu, n, R, p):
     x_marg = np.zeros((n, n))
     y_marg = np.zeros((n, n))
 
+    mask1 = (mu != 0)
+    mask2 = (nu != 0)
+    mask = mask1 & mask2
+
     # Compute values only where mask is True, otherwise 0
     diag_vals = np.zeros((n, n))
-    if p == 2:
-        diag_vals = 2 * mu * nu / (mu + nu)
-    elif p == 1:
-        diag_vals = np.sqrt(mu * nu)
-    elif p < 1:
-        diag_vals = ((mu**(p-1) + nu**(p-1)) / (2 * (mu**(p-1) * nu**(p-1))))**(1/(1-p))
-    elif p > 1:  
-        diag_vals = ((mu * nu) / (mu**(p-1) + nu**(p-1))**(1/(p-1))) * 2**(1/(p-1))
+    if np.any(mask):
+        if p == 2:
+            diag_vals[mask] = 2 * mu[mask] * nu[mask] / (mu[mask] + nu[mask])
+        elif p == 1:
+            diag_vals[mask] = np.sqrt(mu[mask] * nu[mask])
+        elif p < 1:
+            diag_vals[mask] = ((mu[mask]**(p-1) + nu[mask]**(p-1)) / (2 * (mu[mask]**(p-1) * nu[mask]**(p-1))))**(1/(1-p))
+        elif p > 1:  
+            diag_vals[mask] = ((mu[mask] * nu[mask]) / (mu[mask]**(p-1) + nu[mask]**(p-1))**(1/(p-1))) * 2**(1/(p-1))
 
     x[0] = diag_vals
-    x_marg = diag_vals / mu
-    y_marg = diag_vals / nu
+    x_marg[mask] = diag_vals[mask] / mu[mask]
+    y_marg[mask] = diag_vals[mask] / nu[mask]
 
-    return x, x_marg, y_marg
+    return x, x_marg, y_marg, mask1, mask2
 
 
 '''
@@ -157,13 +162,14 @@ Function to define the gradient of UOT with respect to the transport plan
 and to truncated supports S_i, S_j in O(n^2)
 Parameters:
     x_marg, y_marg: X and Y marginals of the transportation plan
+    mask1, mask2: masks for the gradient
     c: cost vector for the truncated problem
     displacement_map: list of (di, dj) displacements corresponding to each cost entry
     p: main parameter that defines the p-entropy
     n: dimension
     R: truncation radius
 '''
-def grad_trunc_dim2(x_marg, y_marg, c, displacement_map, p, n, R):
+def grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c, displacement_map, p, n, R):
     grid_size = 2 * R - 1
     
     # Initialize gradient
@@ -172,8 +178,8 @@ def grad_trunc_dim2(x_marg, y_marg, c, displacement_map, p, n, R):
     # Compute derivatives
     dx = np.zeros((n, n))
     dy = np.zeros((n, n))
-    dx = dUp_dx(x_marg, p)
-    dy = dUp_dx(y_marg, p)
+    dx[mask1] = dUp_dx(x_marg[mask1], p)
+    dy[mask2] = dUp_dx(y_marg[mask2], p)
     
     # Iterate through each band k using the displacement map
     for k, (di, dj) in enumerate(displacement_map):
@@ -195,15 +201,20 @@ def grad_trunc_dim2(x_marg, y_marg, c, displacement_map, p, n, R):
         # Extract relevant slices
         dx_source = dx[source_i_slice, source_j_slice]
         dy_target = dy[target_i_slice, target_j_slice]
+        mask_source = mask1[source_i_slice, source_j_slice]
+        mask_target = mask2[target_i_slice, target_j_slice]
+        
+        # Combined mask
+        mask = mask_source & mask_target
         
         # Compute gradient
-        grad_x[k, source_i_slice, source_j_slice] = (
-            c[k] + dx_source + dy_target
+        grad_x[k, source_i_slice, source_j_slice][mask] = (
+            c[k] + dx_source[mask] + dy_target[mask]
         )
     
     # Gradients for truncated supports
-    grad_si = 1/2*R + dx
-    grad_sj = 1/2*R + dy
+    grad_si = np.where(mask1, 1/2*R + dx, 0)
+    grad_sj = np.where(mask2, 1/2*R + dy, 0)
     
     return grad_x, (grad_si, grad_sj)
 
@@ -286,20 +297,24 @@ Parameters:
     M: upper bound for generalized simplex
     eps: tolerance
     mu, nu: measures
+    mask1, mask2: masks for valid entries in gradients
 '''
-def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mu, nu):
+def LMO_trunc_dim2_s(si, sj, grad_s, M, eps, mu, nu, mask1, mask2):
     grad_si, grad_sj = grad_s
+    # FW: restrict minimum search to valid entries only (masked by mask1/mask2)
+    grad_si_fw = np.where(mask1, grad_si, np.inf)
+    grad_sj_fw = np.where(mask2, grad_sj, np.inf)
 
     # Frank-Wolfe direction (minimize gradient)
-    if (grad_si.min() + grad_sj.min()) < -eps:
+    if (grad_si_fw.min() + grad_sj_fw.min()) < -eps:
         # Find 2D positions of minima
-        FW_si = np.unravel_index(np.argmin(grad_si), grad_si.shape)
-        FW_sj = np.unravel_index(np.argmin(grad_sj), grad_sj.shape)
+        FW_si = np.unravel_index(np.argmin(grad_si_fw), grad_si.shape)
+        FW_sj = np.unravel_index(np.argmin(grad_sj_fw), grad_sj.shape)
     else:
         FW_si, FW_sj = (-1, -1), (-1, -1)
     
     # Away Frank-Wolfe direction (maximize gradient among active set)
-    mask_si = (si > eps)
+    mask_si = (si > eps) 
     mask_sj = (sj > eps)
     
     if not np.any(mask_si) and not np.any(mask_sj):
@@ -513,6 +528,7 @@ Parameters
     s_i, s_j       : (n,n) arrays
     grad_x         : (K,n,n) array, K = (2R-1)^2
     grad_s         : tuple (grad_si, grad_sj), each (n,n)
+    mask1, mask2   : (n,n) boolean masks
     c_trunc        : (K,) cost vector aligned with displacement_map
     displacement_map : list[(di,dj)] length K
     p, R           : parameters
@@ -522,7 +538,7 @@ Parameters
     vk_s           : (FW_si, FW_sj, AFW_si, AFW_sj) where each is (i,j) or (-1,-1)
 '''
 def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s,
-                           c_trunc, displacement_map,
+                           mask1, mask2, c_trunc, displacement_map,
                            p, R, vk_x, vk_s):
     (_, full_FW), (_, full_AFW) = vk_x
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
@@ -561,21 +577,23 @@ def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s,
     def get_dx(i, j):
         key = (i, j)
         if key not in dx_cache:
-            dx_cache[key] = dUp_dx(x_marg[i, j] + s_i[i, j], p)
+            dx_cache[key] = dUp_dx(x_marg[i, j] + s_i[i, j], p) if mask1[i, j] else 0.0
         return dx_cache[key]
 
     def get_dy(k, l):
         key = (k, l)
         if key not in dy_cache:
-            dy_cache[key] = dUp_dx(y_marg[k, l] + s_j[k, l], p)
+            dy_cache[key] = dUp_dx(y_marg[k, l] + s_j[k, l], p) if mask2[k, l] else 0.0
         return dy_cache[key]
 
     # Update grad_s at affected pixels
     for (i, j) in affected_src:
-        grad_si[i, j] = 0.5 * R + get_dx(i, j)
+        if mask1[i, j]:
+            grad_si[i, j] = 0.5 * R + get_dx(i, j)
 
     for (k, l) in affected_tgt:
-        grad_sj[k, l] = 0.5 * R + get_dy(k, l)
+        if mask2[k, l]:
+            grad_sj[k, l] = 0.5 * R + get_dy(k, l)
 
     # Update grad_x entries impacted by affected sources
     # For fixed source (i,j): grad_x[k,i,j] changes for all k where target in bounds & mask2.
@@ -586,7 +604,7 @@ def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s,
             di, dj = displacement_map[k_idx]
             ti = i + di
             tj = j + dj
-            if 0 <= ti < n and 0 <= tj < n:
+            if 0 <= ti < n and 0 <= tj < n and mask2[ti, tj]:
                 grad_x[k_idx, i, j] = c_trunc[k_idx] + dx_val + get_dy(ti, tj)
 
     # Update grad_x entries impacted by affected targets
@@ -599,7 +617,7 @@ def update_grad_trunc_dim2(x_marg, y_marg, s_i, s_j, grad_x, grad_s,
             di, dj = displacement_map[k_idx]
             i = k - di
             j = l - dj
-            if 0 <= i < n and 0 <= j < n:
+            if 0 <= i < n and 0 <= j < n and mask1[i, j]:
                 grad_x[k_idx, i, j] = c_trunc[k_idx] + get_dx(i, j) + dy_val
 
     return grad_x, (grad_si, grad_sj)
@@ -685,17 +703,17 @@ def PW_FW_dim2_trunc(mu, nu, M, p, R,
     c_trunc, displacement_map = cost_matrix_trunc_dim2(R)
 
     # initialization
-    xk, x_marg, y_marg = x_init_trunc_dim2(mu, nu, n, R, p)
+    xk, x_marg, y_marg, mask1, mask2 = x_init_trunc_dim2(mu, nu, n, R, p)
     s_i = np.zeros((n, n))
     s_j = np.zeros((n, n))
 
-    grad_xk_x, grad_xk_s = grad_trunc_dim2(x_marg, y_marg, c_trunc, displacement_map, p, n, R)
+    grad_xk_x, grad_xk_s = grad_trunc_dim2(x_marg, y_marg, mask1, mask2, c_trunc, displacement_map, p, n, R)
 
     for k in range(max_iter):
         # LMO
         i_FW, i_AFW = LMO_trunc_dim2_x(xk, grad_xk_x, displacement_map, M, eps=eps)
         vk_x = (i_FW, i_AFW)
-        FW_si, FW_sj, AFW_si, AFW_sj = LMO_trunc_dim2_s(s_i, s_j, grad_xk_s, M, eps, mu, nu)
+        FW_si, FW_sj, AFW_si, AFW_sj = LMO_trunc_dim2_s(s_i, s_j, grad_xk_s, M, eps, mu, nu, mask1, mask2)
         vk_s = (FW_si, FW_sj, AFW_si, AFW_sj)
 
         # gap
@@ -716,7 +734,7 @@ def PW_FW_dim2_trunc(mu, nu, M, p, R,
         # gradient update (incremental)
         grad_xk_x, grad_xk_s = update_grad_trunc_dim2(
             x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
-            c_trunc, displacement_map, p, R, vk_x, vk_s)
+            mask1, mask2, c_trunc, displacement_map, p, R, vk_x, vk_s)
         
     print("FW_2dim_trunc reached max iterations:", max_iter)
     return xk, (grad_xk_x, grad_xk_s), x_marg, y_marg, s_i, s_j

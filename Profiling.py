@@ -7,9 +7,9 @@ from FW_1dim_0 import PW_FW_dim1, UOT_cost
 from FW_1dim_p2_0 import PW_FW_dim1_p2
 from FW_1dim_p1_5_0 import PW_FW_dim1_p1_5
 from FW_1dim_trunc_0 import PW_FW_dim1_trunc, truncated_cost
-from FW_2dim import PW_FW_dim2
-from FW_2dim_p2 import PW_FW_dim2_p2
-from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_trunc_dim2
+from FW_2dim_0 import PW_FW_dim2
+from FW_2dim_p2_0 import PW_FW_dim2_p2
+from FW_2dim_trunc_0 import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_trunc_dim2
 
 
 def make_data(n):
@@ -19,8 +19,8 @@ def make_data(n):
       c1 = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
 
       # 2D measures: size n x n
-      mu2 = np.random.randint(1, 100, size=(n, n))
-      nu2 = np.random.randint(1, 100, size=(n, n))
+      mu2 = np.random.randint(0, 100, size=(n, n))
+      nu2 = np.random.randint(0, 100, size=(n, n))
 
       return mu1, nu1, c1, mu2, nu2
 

@@ -40,8 +40,12 @@ def dUp_dx(x, p):
         result = np.zeros_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = np.log(x[mask_nonzero])
-    else:
+    elif p > 1:
         result = (x**(p - 1) - 1) / (p - 1)
+    else: # p < 1
+        result = np.zeros_like(x, dtype=float)
+        mask_nonzero = (x > 0)
+        result[mask_nonzero] = (x[mask_nonzero]**(p-1) - 1) / (p - 1)
     
     return result
 

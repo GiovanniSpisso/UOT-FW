@@ -4,7 +4,7 @@ import numpy as np
 from FW_1dim       import PW_FW_dim1, UOT_cost
 from FW_1dim_p2    import PW_FW_dim1_p2, cost_p2
 from FW_1dim_p1_5  import PW_FW_dim1_p1_5, cost_p1_5
-from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost, UOT_cost_upper
+from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost, UOT_cost_upper, vector_to_matrix
 
 np.set_printoptions(precision=3, suppress=True)
 
@@ -15,8 +15,8 @@ n        = 1000
 max_iter = 30000
 R        = 10
 p        = 1
-delta    = 0.001
-eps      = 0.001
+delta    = 0.0000001
+eps      = 0.0000001
 
 m_runs   = 1      # number of runs
 seed     = 0      # set once for reproducible but different runs
@@ -77,9 +77,8 @@ def run_FW_1dim_trunc(mu, nu, M):
     cost       = truncated_cost(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R)
     cost_upper = UOT_cost_upper(cost, n, s_i, R, mu)
     si_mu_sum  = float(np.sum(s_i * mu))
-    print("Number of non 0 components: ", np.sum(xk > 1e-12))
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg,
-                extras=dict(s_i=s_i, s_j=s_j, cost_upper=cost_upper, si_mu_sum=si_mu_sum))
+                extras=dict(s_i=s_i, s_j=s_j, cost_upper=cost_upper, si_mu_sum=si_mu_sum, grad = (gx, gs)))
 
 def run_POT(mu, nu, M):
     t0 = time.time()
@@ -120,7 +119,15 @@ for run_id in range(1, m_runs + 1):
 
         extra = ""
         if name == 'FW_1dim_trunc':
+            plan_trunc = vector_to_matrix(r['plan'], n, R)
+            marg_x_trunc = r['x_marg']
+            marg_y_trunc = r['y_marg']
             extra = f"   sum(s_i*mu)={r['extras']['si_mu_sum']:.6f}"
+            grad_trunc_x = vector_to_matrix(r['extras']['grad'][0], n, R)
+        if name == 'POT':
+            plan_pot = r['plan']
+            marg_x_pot = np.sum(plan_pot, axis=1)
+            marg_y_pot = np.sum(plan_pot, axis=0)
 
         print(f"  {name:<20} cost={r['cost']:.6f}   time={r['time']:.4f} s{extra}")
 
@@ -136,3 +143,21 @@ for name, v in stats.items():
     mean_cost = float(np.mean(v['costs']))
     mean_time = float(np.mean(v['times']))
     print(f"{name:<20} mean cost={mean_cost:.6f}   mean time={mean_time:.4f} s")
+
+#max_diff = np.max(plan_trunc - plan_pot)
+#print("Difference: ", max_diff)
+argmax_diff = np.unravel_index(np.argmax(np.abs(plan_trunc - plan_pot)), plan_trunc.shape)
+print("Max diff at index: ", argmax_diff)
+print("Truncated plan at max diff: ", plan_trunc[argmax_diff])
+print("POT plan at max diff: ", plan_pot[argmax_diff])
+print("diff x_marg_trunc - x_marg_POT at max diff: ", (marg_x_trunc*mu - marg_x_pot)[argmax_diff[0]])
+print("diff y_marg_trunc - y_marg_POT at max diff: ", (marg_y_trunc*nu - marg_y_pot)[argmax_diff[1]])
+print("grad at max diff: ", grad_trunc_x[argmax_diff])
+print("mu at max diff: ", mu[argmax_diff[0]])
+print("nu at max diff: ", nu[argmax_diff[1]])
+#print("trunc_plan: ", plan_trunc)
+#print("POT plan: ", plan_pot)
+#print("x_marg_trunc - x_marg_pot: \n", marg_x_trunc*mu - marg_x_pot)
+#print("y_marg_trunc - y_marg_pot: \n", marg_y_trunc*nu - marg_y_pot)
+#print("x_marg_pot: ", marg_x_pot)
+#print("y_marg_pot: ", marg_y_pot)  

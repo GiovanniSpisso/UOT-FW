@@ -1,6 +1,7 @@
-1.  Cambio max_step in tutti i codici (nota: per p particolari si può migliorare)
+1.  Per p particolari si può migliorare max_step
     Stampo i piani PW_FW + POT in n=1000 e vedi dove c'è la differenza
     Prova OT unbalanced functions
+    Metti assert nel codice!
     Confronto con gradiente proiettato (p=2)
 
     CAPIRE: R... come meglio prenderlo? Sembra che una via di mezzo sia la cosa migliore...

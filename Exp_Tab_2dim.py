@@ -16,8 +16,8 @@ np.set_printoptions(precision=3, suppress=True)
 # ──────────────────────────────────────────────
 # Parameters
 # ──────────────────────────────────────────────
-n        = 50
-R        = 3
+n        = 30
+R        = 5
 p        = 1
 max_iter = 10000
 delta    = 0.001
@@ -132,10 +132,10 @@ def run_POT(mu, nu, M):
 # Comment out any line to skip that solver entirely.
 # ──────────────────────────────────────────────
 solvers = {
-    "FW_2dim_p2": run_FW_2dim_p2,
-    "FW_2dim": run_FW_2dim,
-    #"FW_2dim_trunc": run_FW_2dim_trunc,
-    #"POT": run_POT,
+    #"FW_2dim_p2": run_FW_2dim_p2,
+    #"FW_2dim": run_FW_2dim,
+    "FW_2dim_trunc": run_FW_2dim_trunc,
+    "POT": run_POT,
 }
 
 # stats[name] = {'costs': [...], 'times': [...]}

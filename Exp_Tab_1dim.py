@@ -11,9 +11,9 @@ np.set_printoptions(precision=3, suppress=True)
 # ──────────────────────────────────────────────
 # Parameters
 # ──────────────────────────────────────────────
-n        = 500
+n        = 1000
 max_iter = 30000
-R        = 10
+R        = 5
 p        = 1
 delta    = 0.001
 eps      = 0.001
@@ -85,6 +85,7 @@ def run_POT(mu, nu, M):
     result = ot.solve_sample(X_a, X_b, mu, nu, unbalanced_type = 'KL',
                              metric='euclidean', unbalanced=1)
     elapsed = time.time() - t0
+    #cost = UOT_cost(result.plan, np.sum(result.plan, axis=1)/mu, np.sum(result.plan, axis=0)/nu, c, mu, nu, p=1)
     return dict(cost=result.value, time=elapsed, plan=result.plan, x_marg=None, y_marg=None,
                 extras={})
 

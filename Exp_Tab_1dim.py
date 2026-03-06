@@ -13,10 +13,10 @@ np.set_printoptions(precision=3, suppress=True)
 # ──────────────────────────────────────────────
 n        = 1000
 max_iter = 30000
-R        = 5
+R        = 10
 p        = 1
-delta    = 0.001
-eps      = 0.001
+delta    = 0.000001
+eps      = 0.000001
 
 m_runs   = 1      # number of runs
 seed     = 0      # set once for reproducible but different runs
@@ -80,13 +80,21 @@ def run_FW_1dim_trunc(mu, nu, M):
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg,
                 extras=dict(s_i=s_i, s_j=s_j, cost_upper=cost_upper, si_mu_sum=si_mu_sum))
 
-def run_POT(mu, nu, M):
+def run_solve_sample(mu, nu, M):
     t0 = time.time()
     result = ot.solve_sample(X_a, X_b, mu, nu, unbalanced_type = 'KL',
                              metric='euclidean', unbalanced=1)
     elapsed = time.time() - t0
     #cost = UOT_cost(result.plan, np.sum(result.plan, axis=1)/mu, np.sum(result.plan, axis=0)/nu, c, mu, nu, p=1)
     return dict(cost=result.value, time=elapsed, plan=result.plan, x_marg=None, y_marg=None,
+                extras={})
+
+def run_sinkhorn(mu, nu, M):
+    t0 = time.time()
+    result = ot.sinkhorn_unbalanced(mu, nu, c, reg=0.01, reg_m=1)
+    elapsed = time.time() - t0
+    cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=1)
+    return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None,
                 extras={})
 
 # ──────────────────────────────────────────────
@@ -98,7 +106,8 @@ solvers = {
     #'FW_1dim_p2': run_FW_1dim_p2,
     #'FW_1dim_p1_5': run_FW_1dim_p1_5,
     'FW_1dim_trunc': run_FW_1dim_trunc,
-    'POT': run_POT,
+    'POT_solve_sample': run_solve_sample,
+    #'POT_sinkhorn': run_sinkhorn,
 }
 
 # stats[name] = {'costs': [...], 'times': [...]}

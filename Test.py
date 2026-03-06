@@ -120,6 +120,8 @@ for run_id in range(1, m_runs + 1):
         extra = ""
         if name == 'FW_1dim_trunc':
             plan_trunc = vector_to_matrix(r['plan'], n, R)
+            s_i = r['extras']['s_i']
+            s_j = r['extras']['s_j']
             marg_x_trunc = r['x_marg']
             marg_y_trunc = r['y_marg']
             extra = f"   sum(s_i*mu)={r['extras']['si_mu_sum']:.6f}"
@@ -144,20 +146,24 @@ for name, v in stats.items():
     mean_time = float(np.mean(v['times']))
     print(f"{name:<20} mean cost={mean_cost:.6f}   mean time={mean_time:.4f} s")
 
-#max_diff = np.max(plan_trunc - plan_pot)
-#print("Difference: ", max_diff)
-argmax_diff = np.unravel_index(np.argmax(np.abs(plan_trunc - plan_pot)), plan_trunc.shape)
-print("Max diff at index: ", argmax_diff)
-print("Truncated plan at max diff: ", plan_trunc[argmax_diff])
-print("POT plan at max diff: ", plan_pot[argmax_diff])
-print("diff x_marg_trunc - x_marg_POT at max diff: ", (marg_x_trunc*mu - marg_x_pot)[argmax_diff[0]])
-print("diff y_marg_trunc - y_marg_POT at max diff: ", (marg_y_trunc*nu - marg_y_pot)[argmax_diff[1]])
-print("grad at max diff: ", grad_trunc_x[argmax_diff])
-print("mu at max diff: ", mu[argmax_diff[0]])
-print("nu at max diff: ", nu[argmax_diff[1]])
+
+#argmax_diff = np.unravel_index(np.argmax(np.abs(plan_trunc - plan_pot)), plan_trunc.shape)
+#print("Max diff at index: ", argmax_diff)
+#print("Truncated plan at max diff: ", plan_trunc[argmax_diff])
+#print("POT plan at max diff: ", plan_pot[argmax_diff])
+#print("diff x_marg_trunc - x_marg_POT at max diff: ", (marg_x_trunc*mu - marg_x_pot)[argmax_diff[0]])
+#print("diff y_marg_trunc - y_marg_POT at max diff: ", (marg_y_trunc*nu - marg_y_pot)[argmax_diff[1]])
+#print("grad at max diff: ", grad_trunc_x[argmax_diff])
+#print("mu at max diff: ", mu[argmax_diff[0]])
+#print("nu at max diff: ", nu[argmax_diff[1]])
 #print("trunc_plan: ", plan_trunc)
 #print("POT plan: ", plan_pot)
 #print("x_marg_trunc - x_marg_pot: \n", marg_x_trunc*mu - marg_x_pot)
 #print("y_marg_trunc - y_marg_pot: \n", marg_y_trunc*nu - marg_y_pot)
 #print("x_marg_pot: ", marg_x_pot)
 #print("y_marg_pot: ", marg_y_pot)  
+
+#print([i for i in range(len(plan_trunc)) if plan_trunc[i, i] == 0])
+
+print("Truncated plan around max diff: \n", plan_trunc[665:670, 665:670])
+print("POT plan around max diff: \n", plan_pot[665:670, 665:670])

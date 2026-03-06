@@ -1,5 +1,5 @@
 1.  Per p particolari si può migliorare max_step
-    Stampo i piani PW_FW + POT in n=1000 e vedi dove c'è la differenza
+    Ho messo in Up(0) = 10000 e ho ancora dUp(0) = 0... come correggere?
     Prova OT unbalanced functions
     Metti assert nel codice!
     Confronto con gradiente proiettato (p=2)

@@ -11,7 +11,7 @@ def Up(x, p):
     
     if p == 1:
         # For x == 0: result = 1 (limit)
-        result = np.ones_like(x, dtype=float)
+        result = np.full_like(x, 10000, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = x[mask_nonzero] * np.log(x[mask_nonzero]) - x[mask_nonzero] + 1
     elif p == 0:
@@ -242,8 +242,8 @@ def grad_trunc(x_marg, y_marg, c, p, n, R):
         grad_x[pos:pos + m] = abs(k) + dx[i] + dy[j]
         pos += m
     
-    grad_si = 1/2*R + dx
-    grad_sj = 1/2*R + dy
+    grad_si = 0.5*R + dx
+    grad_sj = 0.5*R + dy
 
     return grad_x, (grad_si, grad_sj)
 

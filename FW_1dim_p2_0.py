@@ -445,13 +445,13 @@ def apply_step_p2(xk, x_marg, y_marg, mu, nu, M, vk, coords):
 Pairwise Frank-Wolfe (specific for p = 2)
 Parameters:
   mu, nu: measures
-  M: upper bound for generalized simplex
   max_iter: max iterations
   delta, eps: tolerance
 '''
-def PW_FW_dim1_p2(mu, nu, M,
+def PW_FW_dim1_p2(mu, nu,
                   max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
+  M = n * (np.sum(mu) + np.sum(nu)) # upper bound for generalized simplex
 
   # transportation plan, marginals and gradient initialization
   xk, x_marg, y_marg, mask1, mask2 = x_init_p2(mu, nu, n)

@@ -415,15 +415,15 @@ def apply_step_dim2(xk, x_marg, y_marg, grad_xk, mu, nu, M, v, c, p):
 Pairwise Frank-Wolfe
 Parameters:
   mu, nu: measures
-  M: upper bound for generalized simplex
   p: main parameter that defines the p-entropy
   step: stepsize calculation method
   max_iter: max iterations
   delta, eps: tolerance
 '''
-def PW_FW_dim2(mu, nu, M, p, c,
+def PW_FW_dim2(mu, nu, p, c,
                max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
+  M = n * n * (np.sum(mu) + np.sum(nu)) # upper bound for generalized simplex
   # transportation plan, marginals and gradient initialization
   xk, x_marg, y_marg, mask1, mask2 = x_init_dim2(mu, nu, p, n)
   grad_xk = grad_dim2(x_marg, y_marg, mask1, mask2, p, c)

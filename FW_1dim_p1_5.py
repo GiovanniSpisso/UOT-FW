@@ -523,13 +523,13 @@ def apply_step_p1_5(xk, x_marg, y_marg, grad_xk, mu, nu, M, vk, coords):
 Pairwise Frank-Wolfe (specific for p = 1.5)
 Parameters:
   mu, nu: measures
-  M: upper bound for generalized simplex
   max_iter: max iterations
   delta, eps: tolerance
 '''
-def PW_FW_dim1_p1_5(mu, nu, M,
+def PW_FW_dim1_p1_5(mu, nu,
                     max_iter = 100, delta = 0.01, eps = 0.001):
   n = np.shape(mu)[0]
+  M = n * (np.sum(mu) + np.sum(nu)) # upper bound for generalized simplex
 
   # initial transportation plan, marginals and gradient initialization
   xk, x_marg, y_marg = x_init_p1_5(mu, nu, n)

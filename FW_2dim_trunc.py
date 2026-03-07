@@ -12,7 +12,7 @@ def Up(x, p):
     
     if p == 1:
         # For x == 0: result = 1 (limit)
-        result = np.ones_like(x, dtype=float)
+        result = np.full_like(x, 10000, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = x[mask_nonzero] * np.log(x[mask_nonzero]) - x[mask_nonzero] + 1
     elif p == 0:
@@ -670,16 +670,16 @@ def apply_step_trunc_dim2(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
 Pairwise Frank-Wolfe for 2D truncated UOT.
 Parameters:
     mu, nu: measures (n x n arrays)
-    M: upper bound for generalized simplex
     p: entropy parameter
     R: truncation radius
     max_iter: maximum iterations
     delta: convergence threshold for the gap
     eps: tolerance for LMO directions
 '''
-def PW_FW_dim2_trunc(mu, nu, M, p, R,
+def PW_FW_dim2_trunc(mu, nu, p, R,
                      max_iter=100, delta=0.01, eps=0.001):
     n = mu.shape[0]
+    M = n * n * (np.sum(mu) + np.sum(nu)) # upper bound for generalized simplex
 
     # cost + displacement map
     c_trunc, displacement_map = cost_matrix_trunc_dim2(R)

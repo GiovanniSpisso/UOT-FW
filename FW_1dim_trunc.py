@@ -683,7 +683,6 @@ def apply_step_trunc(xk, x_marg, y_marg, s_i, s_j, grad_xk_x, grad_xk_s,
 Pair-Wise Frank-Wolfe algorithm for 1D truncated UOT
 Parameters:
     mu, nu: measures
-    M: upper bound for generalized simplex
     p: main parameter that defines the p-entropy
     c: cost function
     R: truncation radius
@@ -691,9 +690,10 @@ Parameters:
     delta: convergence tolerance
     eps: direction tolerance
 '''
-def PW_FW_dim1_trunc(mu, nu, M, p, R,
+def PW_FW_dim1_trunc(mu, nu, p, R,
                      max_iter = 100, delta = 0.01, eps = 0.001):
     n = np.shape(mu)[0]
+    M = n * (np.sum(mu) + np.sum(nu)) # upper bound for generalized simplex
     c = build_c(n, R)
 
     # transportation plan, marginals, cost and gradient initialization

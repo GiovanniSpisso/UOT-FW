@@ -16,7 +16,7 @@ np.set_printoptions(precision=3, suppress=True)
 # ──────────────────────────────────────────────
 # Parameters
 # ──────────────────────────────────────────────
-n        = 30
+n        = 50
 R        = 5
 p        = 1
 max_iter = 10000
@@ -46,36 +46,35 @@ X_b = X_a.copy()
 def sample_measures(rng):
     mu = rng.integers(1, 100, size=(n, n))
     nu = rng.integers(1, 100, size=(n, n))
-    M  = n * (np.sum(mu) + np.sum(nu))
-    return mu, nu, M
+    return mu, nu
 
 # ──────────────────────────────────────────────
 # Solver wrappers
 # Each returns a unified dict with keys:
 #   cost, time, plan, x_marg, y_marg, extras
 # ──────────────────────────────────────────────
-def run_FW_2dim(mu, nu, M):
+def run_FW_2dim(mu, nu):
     t0 = time.time()
     xk, grad, x_marg, y_marg = PW_FW_dim2(
-        mu, nu, M, p, c2d, max_iter=max_iter, delta=delta, eps=eps
+        mu, nu, p, c2d, max_iter=max_iter, delta=delta, eps=eps
     )
     elapsed = time.time() - t0
     cost = UOT_cost(xk, x_marg, y_marg, c2d, mu, nu, p)
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg, extras={})
 
-def run_FW_2dim_p2(mu, nu, M):
+def run_FW_2dim_p2(mu, nu):
     t0 = time.time()
     xk, grad, x_marg, y_marg = PW_FW_dim2_p2(
-        mu, nu, M, max_iter=max_iter, delta=delta, eps=eps
+        mu, nu, max_iter=max_iter, delta=delta, eps=eps
     )
     elapsed = time.time() - t0
     cost = cost_dim2_p2(xk, x_marg, y_marg, mu, nu)
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg, extras={})
 
-def run_FW_2dim_trunc(mu, nu, M):
+def run_FW_2dim_trunc(mu, nu):
     t0 = time.time()
     xk, (gx, gs), x_marg, y_marg, s_i, s_j = PW_FW_dim2_trunc(
-        mu, nu, M, p, R, max_iter=max_iter, delta=delta, eps=eps
+        mu, nu, p, R, max_iter=max_iter, delta=delta, eps=eps
     )
     elapsed = time.time() - t0
     cost       = truncated_cost_dim2(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R)
@@ -99,7 +98,7 @@ def run_FW_2dim_trunc(mu, nu, M):
         ),
     )
 
-def run_POT(mu, nu, M):
+def run_POT(mu, nu):
     t0 = time.time()
     a = mu.ravel()
     b = nu.ravel()
@@ -147,11 +146,11 @@ rng = np.random.default_rng(seed)
 # RUN m TIMES
 # ──────────────────────────────────────────────
 for run_id in range(1, m_runs + 1):
-    mu, nu, M = sample_measures(rng)
+    mu, nu = sample_measures(rng)
     print(f"\nRun {run_id}/{m_runs}")
 
     for name, solver in solvers.items():
-        r = solver(mu, nu, M)
+        r = solver(mu, nu)
         stats[name]["costs"].append(r["cost"])
         stats[name]["times"].append(r["time"])
 

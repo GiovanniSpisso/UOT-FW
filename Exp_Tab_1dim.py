@@ -15,8 +15,8 @@ n        = 1000
 max_iter = 30000
 R        = 10
 p        = 1
-delta    = 0.000001
-eps      = 0.000001
+delta    = 0.001
+eps      = 0.001
 
 m_runs   = 1      # number of runs
 seed     = 0      # set once for reproducible but different runs
@@ -33,45 +33,44 @@ X_b = X_a.copy()
 def sample_measures(rng):
     mu = rng.integers(1, 1000, size=n)
     nu = rng.integers(1, 1000, size=n)
-    M  = n * (np.sum(mu) + np.sum(nu))
-    return mu, nu, M
+    return mu, nu
 
 # ──────────────────────────────────────────────
 # Solver wrappers
 # Each returns a unified dict with keys:
 #   cost, time, plan, x_marg, y_marg, extras (solver-specific)
 # ──────────────────────────────────────────────
-def run_FW_1dim(mu, nu, M):
+def run_FW_1dim(mu, nu):
     t0 = time.time()
-    xk, grad, x_marg, y_marg = PW_FW_dim1(mu, nu, M, p, c,
+    xk, grad, x_marg, y_marg = PW_FW_dim1(mu, nu, p, c,
                                           max_iter=max_iter, delta=delta, eps=eps)
     elapsed = time.time() - t0
     cost = UOT_cost(xk, x_marg, y_marg, c, mu, nu, p)
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg,
                 extras={})
 
-def run_FW_1dim_p2(mu, nu, M):
+def run_FW_1dim_p2(mu, nu):
     t0 = time.time()
-    xk, grad, x_marg, y_marg = PW_FW_dim1_p2(mu, nu, M,
+    xk, grad, x_marg, y_marg = PW_FW_dim1_p2(mu, nu,
                                              max_iter=max_iter, delta=delta, eps=eps)
     elapsed = time.time() - t0
     cost = cost_p2(xk, x_marg, y_marg, mu, nu)
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg,
                 extras={})
 
-def run_FW_1dim_p1_5(mu, nu, M):
+def run_FW_1dim_p1_5(mu, nu):
     t0 = time.time()
-    xk, grad, x_marg, y_marg = PW_FW_dim1_p1_5(mu, nu, M,
+    xk, grad, x_marg, y_marg = PW_FW_dim1_p1_5(mu, nu,
                                                max_iter=max_iter, delta=delta, eps=eps)
     elapsed = time.time() - t0
     cost = cost_p1_5(xk, x_marg, y_marg, mu, nu)
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg,
                 extras={})
 
-def run_FW_1dim_trunc(mu, nu, M):
+def run_FW_1dim_trunc(mu, nu):
     t0 = time.time()
     xk, (gx, gs), x_marg, y_marg, s_i, s_j = PW_FW_dim1_trunc(
-        mu, nu, M, p, R, max_iter=max_iter, delta=delta, eps=eps
+        mu, nu, p, R, max_iter=max_iter, delta=delta, eps=eps
     )
     elapsed = time.time() - t0
     cost       = truncated_cost(xk, x_marg, y_marg, c_trunc, mu, nu, p, s_i, s_j, R)
@@ -80,7 +79,7 @@ def run_FW_1dim_trunc(mu, nu, M):
     return dict(cost=cost, time=elapsed, plan=xk, x_marg=x_marg, y_marg=y_marg,
                 extras=dict(s_i=s_i, s_j=s_j, cost_upper=cost_upper, si_mu_sum=si_mu_sum))
 
-def run_solve_sample(mu, nu, M):
+def run_solve_sample(mu, nu):
     t0 = time.time()
     result = ot.solve_sample(X_a, X_b, mu, nu, unbalanced_type = 'KL',
                              metric='euclidean', unbalanced=1)
@@ -89,13 +88,26 @@ def run_solve_sample(mu, nu, M):
     return dict(cost=result.value, time=elapsed, plan=result.plan, x_marg=None, y_marg=None,
                 extras={})
 
-def run_sinkhorn(mu, nu, M):
+def run_sinkhorn(mu, nu):
     t0 = time.time()
-    result = ot.sinkhorn_unbalanced(mu, nu, c, reg=0.01, reg_m=1)
+    result = ot.sinkhorn_unbalanced(mu, nu, M = c, reg=0.01, reg_m=1, numItermax=100000)
     elapsed = time.time() - t0
     cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=1)
     return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None,
                 extras={})
+
+def run_lbfgsb(mu, nu):
+    t0 = time.time()
+    result = ot.unbalanced.lbfgsb_unbalanced(
+        mu, nu,           # source and target measures
+        M = c,            # n×n cost matrix
+        reg=0,            # no entropic regularization
+        reg_m=1.0,        # KL penalty = unbalanced=1
+        reg_div='kl',     # KL divergence (matches unbalanced_type='KL')
+        regm_div ='kl')
+    elapsed = time.time() - t0
+    cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=1)
+    return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None, extras={})
 
 # ──────────────────────────────────────────────
 # SELECT WHICH SOLVERS TO RUN
@@ -107,7 +119,8 @@ solvers = {
     #'FW_1dim_p1_5': run_FW_1dim_p1_5,
     'FW_1dim_trunc': run_FW_1dim_trunc,
     'POT_solve_sample': run_solve_sample,
-    #'POT_sinkhorn': run_sinkhorn,
+    'POT_sinkhorn': run_sinkhorn,
+    'POT_lbfgsb': run_lbfgsb,
 }
 
 # stats[name] = {'costs': [...], 'times': [...]}
@@ -118,12 +131,12 @@ rng = np.random.default_rng(seed)
 # ──────────────────────────────────────────────
 # RUN m TIMES
 # ──────────────────────────────────────────────
-mu, nu, M = sample_measures(rng)
+mu, nu = sample_measures(rng)
 for run_id in range(1, m_runs + 1):
     print(f"\nRun {run_id}/{m_runs}")
 
     for name, solver in solvers.items():
-        r = solver(mu, nu, M)
+        r = solver(mu, nu)
         stats[name]['costs'].append(r['cost'])
         stats[name]['times'].append(r['time'])
 

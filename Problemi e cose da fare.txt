@@ -1,13 +1,13 @@
 1.  Per p particolari si può migliorare max_step
-    Ho messo in Up(0) = 10000 e ho ancora dUp(0) = 0... come correggere?
-    Prova OT unbalanced functions
+    Togli M da input delle funzioni
+    Ho messo in Up(0) = 10000 e ho ancora dUp(0) = 0... 
+    (in 1dim, 2dim Trunc, 1dim, 2dim) come correggere definitivamente?
+    OT.unbalanced functions: ho provato solve_sample (ok), sinkhorn_unbalanced (hmm), lbfgsb_unbalanced (hmm)
     Metti assert nel codice!
     Confronto con gradiente proiettato (p=2)
 
     CAPIRE: R... come meglio prenderlo? Sembra che una via di mezzo sia la cosa migliore...
             RICORDA DI TOGLIERE DEBUGGING IN ARMIJO FW_1dim_trunc
-            FW_trunc_1dim sembra aver risolto i problemi di stepsize, per ora... (nota: ho cambiato LMO_x, controlla continui a funzionare)
-            Ho tolto np.float(32) nei vari codici, rischiava di dare problemi numerici di approssimazione...
             
     DA FARE: 2dim (p2, base, trunc)
     fai tabella :
@@ -20,8 +20,6 @@
     p = 2,   dim 2: FW_non_sparse | FW_trunc | FW_p2
     p = 1.5, dim 2: FW_non_sparse | FW_trunc | FW_p1.5
     p = 1,   dim 2: FW_non_sparse | FW_trunc | POT (solve_sample) | (altre?)
-
-    vedere se funzionano altre funzioni e come funziona di preciso M per POT
 
     vai avanti con appunti su OT ed UOT   
 

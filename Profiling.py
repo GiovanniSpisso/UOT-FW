@@ -3,24 +3,24 @@ import numpy as np
 import cProfile
 import pstats
 
-from FW_1dim_0 import PW_FW_dim1, UOT_cost
-from FW_1dim_p2_0 import PW_FW_dim1_p2
-from FW_1dim_p1_5_0 import PW_FW_dim1_p1_5
-from FW_1dim_trunc_0 import PW_FW_dim1_trunc, truncated_cost
-from FW_2dim_0 import PW_FW_dim2
-from FW_2dim_p2_0 import PW_FW_dim2_p2
-from FW_2dim_trunc_0 import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_trunc_dim2
+from FW_1dim import PW_FW_dim1, UOT_cost
+from FW_1dim_p2 import PW_FW_dim1_p2
+from FW_1dim_p1_5 import PW_FW_dim1_p1_5
+from FW_1dim_trunc import PW_FW_dim1_trunc, truncated_cost
+from FW_2dim import PW_FW_dim2
+from FW_2dim_p2 import PW_FW_dim2_p2
+from FW_2dim_trunc import PW_FW_dim2_trunc, truncated_cost_dim2, cost_matrix_trunc_dim2
 
 
 def make_data(n):
       # 1D measures: size n
-      mu1 = np.random.randint(0, 100, size=n)
-      nu1 = np.random.randint(0, 100, size=n)
+      mu1 = np.random.randint(1, 1000, size=n)
+      nu1 = np.random.randint(1, 1000, size=n)
       c1 = np.abs(np.subtract.outer(np.arange(n), np.arange(n)))
 
       # 2D measures: size n x n
-      mu2 = np.random.randint(0, 100, size=(n, n))
-      nu2 = np.random.randint(0, 100, size=(n, n))
+      mu2 = np.random.randint(1, 100, size=(n, n))
+      nu2 = np.random.randint(1, 100, size=(n, n))
 
       return mu1, nu1, c1, mu2, nu2
 
@@ -61,11 +61,9 @@ if __name__ == '__main__':
 
       # Create 1D data
       mu1, nu1, c, _, _ = make_data(n_1d)
-      M1 = n_1d * (np.sum(mu1) + np.sum(nu1))
       
       # Create 2D data
       _, _, _, mu2, nu2 = make_data(n_2d)
-      M2 = n_2d * (np.sum(mu2) + np.sum(nu2))
       
       # Create truncated cost vector for FW_truncated
       c_trunc = np.concatenate([
@@ -81,13 +79,13 @@ if __name__ == '__main__':
 
       # List of solvers to profile: (display_name, callable, pos_args_tuple, kw_args_dict)
       solvers = [
-            ('FW_2dim_p2', PW_FW_dim2_p2, (mu2, nu2, M2), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
-            ('FW_2dim', PW_FW_dim2, (mu2, nu2, M2, p_generic, c2d), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
-            ('FW_2dim_trunc', PW_FW_dim2_trunc, (mu2, nu2, M2, p_generic, R), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
-            ('FW_1dim', PW_FW_dim1, (mu1, nu1, M1, p_generic, c), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
-            ('FW_1dim_p2', PW_FW_dim1_p2, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
-            ('FW_1dim_p1_5', PW_FW_dim1_p1_5, (mu1, nu1, M1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
-            ('FW_1dim_trunc', PW_FW_dim1_trunc, (mu1, nu1, M1, p_generic, R), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_2dim_p2', PW_FW_dim2_p2, (mu2, nu2), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_2dim', PW_FW_dim2, (mu2, nu2, p_generic, c2d), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_2dim_trunc', PW_FW_dim2_trunc, (mu2, nu2, p_generic, R), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_1dim', PW_FW_dim1, (mu1, nu1, p_generic, c), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_1dim_p2', PW_FW_dim1_p2, (mu1, nu1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_1dim_p1_5', PW_FW_dim1_p1_5, (mu1, nu1), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
+            ('FW_1dim_trunc', PW_FW_dim1_trunc, (mu1, nu1, p_generic, R), {'max_iter': max_iter, 'delta': delta, 'eps': eps}),
       ]
 
       results = {}

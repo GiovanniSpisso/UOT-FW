@@ -1,4 +1,5 @@
 import numpy as np
+from itertools import combinations # for step_p1
 
 '''
 Power-like entropy function
@@ -178,148 +179,155 @@ def gap_calc_dim2(grad, dir, M, sum_term):
 
 
 '''
-Optimal stepsize (p = 2)
+Function to list the coordinates to update
 Parameters:
-  x_marg, y_marg: X and Y marginals of the transportation plan
-  c: cost function
-  mu, nu: measures
-  i: indices of the selected FW and AFW vertices
+    x_marg, y_marg: X and Y marginals of the transportation plan
+    grad: gradient with respect to the transport plan
+    mu, nu: measures
+    v: (i_FW, j_FW, i_AFW, j_AFW)
+    c: cost function (vector form)
 '''
-def opt_step_dim2(x_marg, y_marg, c, mu, nu, i):
-  (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = i
-  if x1FW == -1:
-    return (c[x1AFW, x2AFW, y1AFW, y2AFW] + y_marg[y1AFW, y2AFW] +
-            x_marg[x1AFW, x2AFW] - 2) / (1/mu[x1AFW, x2AFW] + 1/nu[y1AFW, y2AFW])
-  elif x1AFW == -1:
-    return (2 - c[x1FW, x2FW, y1FW, y2FW] - y_marg[y1FW, y2FW] -
-            x_marg[x1FW, x2FW]) / (1/mu[x1FW, x2FW] + 1/nu[y1FW, y2FW])
-  elif (x1FW, x2FW) == (x1AFW, x2AFW):
-    return (c[x1FW, x2FW, y1AFW, y2AFW] - c[x1FW, x2FW, y1FW, y2FW] + y_marg[y1AFW, y2AFW] -
-            y_marg[y1FW, y2FW]) / (1/nu[y1AFW, y2AFW] + 1/nu[y1FW, y2FW])
-  elif (y1FW, y2FW) == (y1AFW, y2AFW):
-    return (c[x1AFW, x2AFW, y1FW, y2FW] - c[x1FW, x2FW, y1FW, y2FW] + x_marg[x1AFW, x2AFW] -
-            x_marg[x1FW, x2FW]) / (1/mu[x1AFW, x2AFW] + 1/mu[x1FW, x2FW])
-  else:
-    return (c[x1AFW, x2AFW, y1AFW, y2AFW] - c[x1FW, x2FW, y1FW, y2FW] +
-            y_marg[y1AFW, y2AFW] - y_marg[y1FW, y2FW] + x_marg[x1AFW, x2AFW] -
-            x_marg[x1FW, x2FW]) / (1/mu[x1AFW, x2AFW] + 1/mu[x1FW, x2FW] + 1/nu[y1AFW, y2AFW] + 1/nu[y1FW, y2FW])
-
-
-'''
-Armijo stepsize
-Parameters:
-  x_marg, y_marg: X and Y marginals of the transportation plan
-  grad_UOT: gradient of UOT
-  mu, nu: measures
-  v: indices of the selected FW and AFW vertices
-  c: cost function
-  p: main parameter that defines the p-entropy
-  theta, beta, gamma: parameters for the Armijo stepsize
-'''
-def armijo_dim2(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta=1, beta=0.4, gamma=0.5):
+def coord_updates(x_marg, y_marg, grad, mu, nu, v, c):
     # get the indices of the selected FW and AFW vertices
     (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = v
 
-    x_updates = {} 
-    y_updates = {}
+    x_updates = {}  # i -> (a_i, mu_i, coeff) where coeff multiplies theta in delta: delta = coeff * theta
+    y_updates = {}  # j -> (b_j, nu_j, coeff)
 
     def add_x(i, coeff):
-      if i in x_updates:
-          x0, mu0, coeff0 = x_updates[i]
-          x_updates[i] = (x0, mu0, coeff0 + coeff)
-      else:
-          x = x_marg[i]
-          x_updates[i] = (x, mu[i], coeff)
+        if i in x_updates:
+            x0, mu0, coeff0 = x_updates[i]
+            x_updates[i] = (x0, mu0, coeff0 + coeff)
+        else:
+            x = x_marg[i]
+            x_updates[i] = (x, mu[i], coeff)
 
     def add_y(j, coeff):
-      if j in y_updates:
-          y0, nu0, coeff0 = y_updates[j]
-          y_updates[j] = (y0, nu0, coeff0 + coeff)
-      else:
-          y = y_marg[j]
-          y_updates[j] = (y, nu[j], coeff)
+        if j in y_updates:
+            y0, nu0, coeff0 = y_updates[j]
+            y_updates[j] = (y0, nu0, coeff0 + coeff)
+        else:
+            y = y_marg[j]
+            y_updates[j] = (y, nu[j], coeff)
 
+    # Directional derivative <grad, d> + 
+    # Contributions to marginals from x-plan FW/AFW (these affect x_marg at i_* and y_marg at j_*) +
+    # Contributions from supports FW/AFW +
     inner = 0
     cost_lin = 0
     if x1FW != -1:
-      inner += grad_UOT[x1FW, x2FW, y1FW, y2FW]
+      inner += grad[x1FW, x2FW, y1FW, y2FW]
       add_x((x1FW, x2FW), 1)
       add_y((y1FW, y2FW), 1)
       cost_lin += c[x1FW, x2FW, y1FW, y2FW]
     if x1AFW != -1:
-      inner -= grad_UOT[x1AFW, x2AFW, y1AFW, y2AFW]
+      inner -= grad[x1AFW, x2AFW, y1AFW, y2AFW]
       add_x((x1AFW, x2AFW), -1)
       add_y((y1AFW, y2AFW), -1)
       cost_lin -= c[x1AFW, x2AFW, y1AFW, y2AFW]
 
-    def obj_change(theta_val):
-      diff = theta_val * cost_lin
+    return x_updates, y_updates, inner, cost_lin
 
-      # Entropy changes for x marginals
-      for _, (x, mu_i, coeff) in x_updates.items():
-        d = coeff * theta_val / mu_i
-        diff += (Up(x + d, p) - Up(x, p)) * mu_i
 
-      # Entropy changes for y marginals
-      for _, (y, nu_j, coeff) in y_updates.items():
-        d = coeff * theta_val / nu_j
-        diff += (Up(y + d, p) - Up(y, p)) * nu_j
+'''
+Optimal stepsize for p = 2
+Parameters:
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    cost_lin: linear coefficient for the cost term
+'''
+def step_p2_dim2(x_updates, y_updates, cost_lin):
+    numerator, denominator = cost_lin, 0.0
+    for x, mu_i, coeff in x_updates.values():
+        numerator   += coeff * (x - 1)
+        denominator -= coeff**2 / mu_i
+    for y, nu_j, coeff in y_updates.values():
+        numerator   += coeff * (y - 1)
+        denominator -= coeff**2 / nu_j
 
-      return diff
+    return numerator / denominator
+
+
+'''
+Optimal stepsize for p = 1
+Parameters:
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    cost_lin: linear coefficient for the cost term
+'''
+def step_p1_dim2(x_updates, y_updates, cost_lin):
+    const, terms_num, terms_den = np.exp(-cost_lin), [], []
+    constraint = np.inf
+    for x, mu_i, coeff in x_updates.values():
+        # divide in different cases depending on the coefficient
+        if coeff == 1:
+            const *= mu_i
+            terms_num.append(x * mu_i)
+        elif coeff == -1:
+            const /= - mu_i
+            terms_den.append(- x * mu_i)
+            constraint = min(constraint, x * mu_i)
+    for y, nu_j, coeff in y_updates.values():
+        if coeff == 1:
+            const *= nu_j
+            terms_num.append(y * nu_j)
+        elif coeff == -1:
+            const /= - nu_j
+            terms_den.append(- y * nu_j)
+            constraint = min(constraint, y * nu_j)
+
+    def comb(terms, k):
+        if k < 0:
+            return 0.0
+        return sum(np.prod(combo) for combo in combinations(terms, k))
+
+    # degree of the polynomial is max of the two sizes
+    deg_num, deg_den = len(terms_num), len(terms_den)
+    deg = max(deg_num, deg_den)
+
+    coeffs = []
+    for k in range(deg + 1):
+        coeff = comb(terms_num, deg_num - deg + k) - const * comb(terms_den, deg_den - deg + k)
+        coeffs.append(coeff)
+
+    roots = np.roots(coeffs)  
+    real_roots = roots[np.isreal(roots)].real
+    step = np.max(real_roots[real_roots <= constraint])
     
+    return step
+
+
+'''
+Armijo stepsize for truncated UOT
+Parameters:
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    inner: directional derivative <grad, d>
+    cost_lin: linear coefficient for the cost term
+    p: main parameter
+    theta, beta, gamma: Armijo parameters
+'''
+def armijo_dim2(x_updates, y_updates, inner, cost_lin, p, theta=1.0, beta=0.4, gamma=0.5):
+    def obj_change(theta_val):
+        diff = theta_val * (cost_lin)
+
+        # Entropy changes for x marginals
+        for _, (x, mu_i, coeff) in x_updates.items():
+            d = coeff * theta_val / mu_i
+            diff += (Up(x + d, p) - Up(x, p)) * mu_i
+
+        # Entropy changes for y marginals
+        for _, (y, nu_j, coeff) in y_updates.items():
+            d = coeff * theta_val / nu_j
+            diff += (Up(y + d, p) - Up(y, p)) * nu_j
+
+        return diff
+
+    # Backtracking
     diff = obj_change(theta)
     while diff > beta * theta * inner:
-      theta = gamma * theta
-      diff = obj_change(theta)
+        assert theta > 1e-10, "Armijo stepsize became too small"
 
-    return theta
+        theta *= gamma
+        diff = obj_change(theta)
     
-    
-###### Old Armijo Stepsize ######
-def armijo_dim2_old(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta=1, beta=0.4, gamma=0.5):
-    # get the indices of the selected FW and AFW vertices
-    (x1FW, x2FW, y1FW, y2FW), (x1AFW, x2AFW, y1AFW, y2AFW) = v
-    
-    if x1FW != -1:
-        inner = grad_UOT[x1FW, x2FW, y1FW, y2FW]
-        if x1AFW != -1:
-            inner -= grad_UOT[x1AFW, x2AFW, y1AFW, y2AFW]
-            diff = (theta * (c[x1FW, x2FW, y1FW, y2FW] - c[x1AFW, x2AFW, y1AFW, y2AFW]) + 
-                    (Up(x_marg[x1FW, x2FW] + theta/mu[x1FW, x2FW], p) - Up(x_marg[x1FW, x2FW], p)) * mu[x1FW, x2FW] +
-                    (Up(y_marg[y1FW, y2FW] + theta/nu[y1FW, y2FW], p) - Up(y_marg[y1FW, y2FW], p)) * nu[y1FW, y2FW] + 
-                    (Up(x_marg[x1AFW, x2AFW] - theta/mu[x1AFW, x2AFW], p) - Up(x_marg[x1AFW, x2AFW], p)) * mu[x1AFW, x2AFW] +
-                    (Up(y_marg[y1AFW, y2AFW] - theta/nu[y1AFW, y2AFW], p) - Up(y_marg[y1AFW, y2AFW], p)) * nu[y1AFW, y2AFW])
-            
-            while diff > beta * theta * inner:
-                theta = gamma * theta
-                diff = (theta * (c[x1FW, x2FW, y1FW, y2FW] - c[x1AFW, x2AFW, y1AFW, y2AFW]) + 
-                        (Up(x_marg[x1FW, x2FW] + theta/mu[x1FW, x2FW], p) - Up(x_marg[x1FW, x2FW], p)) * mu[x1FW, x2FW] +
-                        (Up(y_marg[y1FW, y2FW] + theta/nu[y1FW, y2FW], p) - Up(y_marg[y1FW, y2FW], p)) * nu[y1FW, y2FW] + 
-                        (Up(x_marg[x1AFW, x2AFW] - theta/mu[x1AFW, x2AFW], p) - Up(x_marg[x1AFW, x2AFW], p)) * mu[x1AFW, x2AFW] +
-                        (Up(y_marg[y1AFW, y2AFW] - theta/nu[y1AFW, y2AFW], p) - Up(y_marg[y1AFW, y2AFW], p)) * nu[y1AFW, y2AFW])
-        else:
-            diff = (theta * c[x1FW, x2FW, y1FW, y2FW] + 
-                    (Up(x_marg[x1FW, x2FW] + theta/mu[x1FW, x2FW], p) - Up(x_marg[x1FW, x2FW], p)) * mu[x1FW, x2FW] +
-                    (Up(y_marg[y1FW, y2FW] + theta/nu[y1FW, y2FW], p) - Up(y_marg[y1FW, y2FW], p)) * nu[y1FW, y2FW])
-            
-            while diff > beta * theta * inner:
-                theta = gamma * theta
-                diff = (theta * c[x1FW, x2FW, y1FW, y2FW] + 
-                        (Up(x_marg[x1FW, x2FW] + theta/mu[x1FW, x2FW], p) - Up(x_marg[x1FW, x2FW], p)) * mu[x1FW, x2FW] +
-                        (Up(y_marg[y1FW, y2FW] + theta/nu[y1FW, y2FW], p) - Up(y_marg[y1FW, y2FW], p)) * nu[y1FW, y2FW])
-
-    elif x1AFW != -1:
-        inner = -grad_UOT[x1AFW, x2AFW, y1AFW, y2AFW]
-        diff = (-theta * c[x1AFW, x2AFW, y1AFW, y2AFW] + 
-                (Up(x_marg[x1AFW, x2AFW] - theta/mu[x1AFW, x2AFW], p) - Up(x_marg[x1AFW, x2AFW], p)) * mu[x1AFW, x2AFW] +
-                (Up(y_marg[y1AFW, y2AFW] - theta/nu[y1AFW, y2AFW], p) - Up(y_marg[y1AFW, y2AFW], p)) * nu[y1AFW, y2AFW])
-        
-        while diff > beta * theta * inner:
-            theta = gamma * theta
-            diff = (-theta * c[x1AFW, x2AFW, y1AFW, y2AFW] + 
-                    (Up(x_marg[x1AFW, x2AFW] - theta/mu[x1AFW, x2AFW], p) - Up(x_marg[x1AFW, x2AFW], p)) * mu[x1AFW, x2AFW] +
-                    (Up(y_marg[y1AFW, y2AFW] - theta/nu[y1AFW, y2AFW], p) - Up(y_marg[y1AFW, y2AFW], p)) * nu[y1AFW, y2AFW])
-
     return theta
 
 
@@ -329,16 +337,20 @@ Parameters:
   x_marg, y_marg: X and Y marginals of the transportation plan
   grad: gradient of UOT
   mu, nu: measures
-  v: indices of the selected FW and AFW vertices
+  v: search direction
   c: cost function
   p: main parameter
   theta, beta, gamma: Armijo parameters
 '''
-def step_calc_dim2(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma = 0.5):
-  if p == 2:
-    return min(opt_step_dim2(x_marg, y_marg, c, mu, nu, v), theta)
-  else:
-    return armijo_dim2(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = theta, beta = beta, gamma = gamma)
+def step_calc_dim2(x_marg, y_marg, grad, mu, nu, v, c, p, theta = 1.0, beta = 0.4, gamma = 0.5):
+    x_updates, y_updates, inner, cost_lin = coord_updates(x_marg, y_marg, grad, mu, nu, v, c)
+    if p == 1:
+        step = min(step_p1_dim2(x_updates, y_updates, cost_lin), theta)
+    elif p == 2:
+        step = min(step_p2_dim2(x_updates, y_updates, cost_lin), theta)
+    else:
+        step = armijo_dim2(x_updates, y_updates, inner, cost_lin, p, theta = theta, beta = beta, gamma = gamma)
+    return step
 
 
 """

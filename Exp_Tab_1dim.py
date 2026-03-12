@@ -15,8 +15,8 @@ n        = 1000
 max_iter = 30000
 R        = 10
 p        = 1
-delta    = 0.001
-eps      = 0.001
+delta    = 0.0001
+eps      = 0.0001
 
 m_runs   = 1      # number of runs
 seed     = 0      # set once for reproducible but different runs
@@ -31,8 +31,8 @@ X_b = X_a.copy()
 # Utilities
 # ──────────────────────────────────────────────
 def sample_measures(rng):
-    mu = rng.integers(1, 1000, size=n)
-    nu = rng.integers(1, 1000, size=n)
+    mu = rng.integers(1, 1000, size=n).astype(float)
+    nu = rng.integers(1, 1000, size=n).astype(float)
     return mu, nu
 
 # ──────────────────────────────────────────────
@@ -81,8 +81,22 @@ def run_FW_1dim_trunc(mu, nu):
 
 def run_solve_sample(mu, nu):
     t0 = time.time()
+    #x0 = np.zeros((n, n))
+    #diag = np.sqrt(mu * nu)
+    #np.fill_diagonal(x0, diag)
     result = ot.solve_sample(X_a, X_b, mu, nu, unbalanced_type = 'KL',
-                             metric='euclidean', unbalanced=1)
+                             metric='euclidean', unbalanced=1)#, plan_init = x0)
+    elapsed = time.time() - t0
+    #cost = UOT_cost(result.plan, np.sum(result.plan, axis=1)/mu, np.sum(result.plan, axis=0)/nu, c, mu, nu, p=1)
+    return dict(cost=result.value, time=elapsed, plan=result.plan, x_marg=None, y_marg=None,
+                extras={})
+
+def run_solve(mu, nu):
+    t0 = time.time()
+    #x0 = np.zeros((n, n))
+    #diag = np.sqrt(mu * nu)
+    #np.fill_diagonal(x0, diag)
+    result = ot.solve(c, mu, nu, unbalanced_type = 'KL', unbalanced=1) #, plan_init = x0)
     elapsed = time.time() - t0
     #cost = UOT_cost(result.plan, np.sum(result.plan, axis=1)/mu, np.sum(result.plan, axis=0)/nu, c, mu, nu, p=1)
     return dict(cost=result.value, time=elapsed, plan=result.plan, x_marg=None, y_marg=None,
@@ -90,23 +104,88 @@ def run_solve_sample(mu, nu):
 
 def run_sinkhorn(mu, nu):
     t0 = time.time()
-    result = ot.sinkhorn_unbalanced(mu, nu, M = c, reg=0.01, reg_m=1, numItermax=100000)
+    result = ot.unbalanced.sinkhorn_unbalanced(mu, nu, M = c, 
+                                               reg=0.01, reg_m=1, 
+                                               numItermax=1000000
+                                               )
     elapsed = time.time() - t0
     cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=1)
     return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None,
                 extras={})
 
-def run_lbfgsb(mu, nu):
+def run_sinkhorn_translation_invariant(mu, nu):
     t0 = time.time()
+    result = ot.unbalanced.sinkhorn_unbalanced_translation_invariant(mu, nu, M = c, reg=0.01, reg_m=1, numItermax=1000000,
+                                                                     translation_invariant=True, stopThr=1e-10)
+    elapsed = time.time() - t0
+    cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=1)
+    return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None,
+                extras={})
+
+def run_lbfgsb_p1(mu, nu):
+    t0 = time.time()
+    #x0 = np.zeros((n, n))
+    #diag = np.sqrt(mu * nu)
+    #np.fill_diagonal(x0, diag)
     result = ot.unbalanced.lbfgsb_unbalanced(
         mu, nu,           # source and target measures
         M = c,            # n×n cost matrix
         reg=0,            # no entropic regularization
         reg_m=1.0,        # KL penalty = unbalanced=1
         reg_div='kl',     # KL divergence (matches unbalanced_type='KL')
-        regm_div ='kl')
+        regm_div ='kl',
+    #    G0 = x0
+    )
+    elapsed = time.time() - t0
+    result = np.array(result)
+    cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=1)
+    return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None, extras={})
+
+def run_lbfgsb_p2(mu, nu):
+    t0 = time.time()
+    result = ot.unbalanced.lbfgsb_unbalanced(
+        mu, nu,           # source and target measures
+        M = c,            # n×n cost matrix
+        reg=0,            # no entropic regularization
+        reg_m=1.0,        # KL penalty = unbalanced=1
+        reg_div='l2',     # KL divergence (matches unbalanced_type='KL')
+        regm_div ='l2',
+        )
+    elapsed = time.time() - t0
+    result = np.array(result)
+    cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=2)
+    return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None, extras={})
+
+def run_mm_unbalanced_p1(mu, nu):
+    t0 = time.time()
+    #x0 = np.zeros((n, n))
+    #diag = np.sqrt(mu * nu)
+    #np.fill_diagonal(x0, diag)
+    result = ot.unbalanced.mm_unbalanced(
+        mu, nu,           # source and target measures
+        M = c,            # n×n cost matrix
+        reg_m = 1.0,      # KL penalty = unbalanced=1
+        div = 'kl',          
+        #G0 = x0
+        )
     elapsed = time.time() - t0
     cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=1)
+    return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None, extras={})
+
+def run_mm_unbalanced_p2(mu, nu):
+    t0 = time.time()
+    #x0 = np.zeros((n, n))
+    #diag = np.sqrt(mu * nu)
+    #np.fill_diagonal(x0, diag)
+    result = ot.unbalanced.mm_unbalanced(
+        mu, nu,           # source and target measures
+        M = c,            # n×n cost matrix
+        reg_m = 1.0,      # KL penalty = unbalanced=1
+        div = 'l2',
+        #G0 = x0
+        )
+    elapsed = time.time() - t0
+    cost = UOT_cost(result, np.sum(result, axis=1)/mu, np.sum(result, axis=0)/nu, c, mu, nu, p=2)
     return dict(cost=cost, time=elapsed, plan=result, x_marg=None, y_marg=None, extras={})
 
 # ──────────────────────────────────────────────
@@ -118,9 +197,14 @@ solvers = {
     #'FW_1dim_p2': run_FW_1dim_p2,
     #'FW_1dim_p1_5': run_FW_1dim_p1_5,
     'FW_1dim_trunc': run_FW_1dim_trunc,
-    'POT_solve_sample': run_solve_sample,
-    'POT_sinkhorn': run_sinkhorn,
-    'POT_lbfgsb': run_lbfgsb,
+    #'POT_solve_sample': run_solve_sample,
+    #'POT_solve': run_solve,
+    #'POT_sinkhorn': run_sinkhorn,
+    #'POT_sinkhorn_translation_invariant': run_sinkhorn_translation_invariant,
+    #'POT_lbfgsb_p1': run_lbfgsb_p1,
+    #'POT_lbfgsb_p2': run_lbfgsb_p2,
+    #'POT_mm_unbalanced_p1': run_mm_unbalanced_p1,
+    #'POT_mm_unbalanced_p2': run_mm_unbalanced_p2,
 }
 
 # stats[name] = {'costs': [...], 'times': [...]}

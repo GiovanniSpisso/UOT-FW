@@ -1,4 +1,5 @@
 import numpy as np
+from itertools import combinations # for step_trunc_p1
 
 '''
 Power-like entropy function
@@ -357,26 +358,21 @@ def gap_calc_trunc_dim2(x, grad_x, comp_FW, M, s_i, s_j, grad_s, FW_v_s, mu, nu)
 
 
 '''
-Armijo line search for 2D truncated UOT, sparse evaluation.
+Function to list the coordinates to update
 Parameters:
     x_marg, y_marg: X and Y marginals of the transportation plan
-    grad_x: gradient wrt compact plan, shape ((2R-1)^2, n, n)
-    grad_s: (grad_si, grad_sj), each shape (n, n)
+    grad_x: gradient with respect to the transport plan
+    grad_s: gradient with respect to the truncated supports
     mu, nu: measures
     vk_x: ((comp_FW, full_FW), (comp_AFW, full_AFW))
         comp_* = (mat_idx, i, j) in compact representation
         full_* = (x1, x2, y1, y2) in full coordinates
-    vk_s: (FW_si, FW_sj, AFW_si, AFW_sj) each either (a,b) or (-1,-1)
-    s_i, s_j: truncated supports
-    c_trunc: cost vector for truncated problem
-    p: entropy parameter
+    vk_s: (FW_si, FW_sj, AFW_si, AFW_sj) - indices for s
+    s_i, s_j: current truncated supports
+    c_trunc: truncated cost function (vector form)
     R: truncation radius
-    theta, beta, gamma: Armijo parameters
 '''
-def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
-                      s_i, s_j, c_trunc, p, R,
-                      theta=1.0, beta=0.4, gamma=0.5):
-
+def coord_updates(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s, s_i, s_j, c_trunc, R):
     (comp_FW, full_FW), (comp_AFW, full_AFW) = vk_x
     FW_si, FW_sj, AFW_si, AFW_sj = vk_s
     grad_si, grad_sj = grad_s
@@ -384,22 +380,25 @@ def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
     x_updates = {}  # i -> (a_i, mu_i, coeff) where coeff multiplies theta in delta: delta = coeff * theta
     y_updates = {}  # j -> (b_j, nu_j, coeff)
 
-    def add_x(key, coeff):
-        if key in x_updates:
-            x0, mu0, coeff0 = x_updates[key]
-            x_updates[key] = (x0, mu0, coeff0 + coeff)
+    def add_x(i, coeff):
+        if i in x_updates:
+            x0, mu0, coeff0 = x_updates[i]
+            x_updates[i] = (x0, mu0, coeff0 + coeff)
         else:
-            x = x_marg[key] + s_i[key]
-            x_updates[key] = (x, mu[key], coeff)
+            x = x_marg[i] + s_i[i]
+            x_updates[i] = (x, mu[i], coeff)
 
-    def add_y(key, coeff):
-        if key in y_updates:
-            y0, nu0, coeff0 = y_updates[key]
-            y_updates[key] = (y0, nu0, coeff0 + coeff)
+    def add_y(j, coeff):
+        if j in y_updates:
+            y0, nu0, coeff0 = y_updates[j]
+            y_updates[j] = (y0, nu0, coeff0 + coeff)
         else:
-            y = y_marg[key] + s_j[key]
-            y_updates[key] = (y, nu[key], coeff)
+            y = y_marg[j] + s_j[j]
+            y_updates[j] = (y, nu[j], coeff)
 
+    # Directional derivative <grad, d> + 
+    # Contributions to marginals from x-plan FW/AFW (these affect x_marg at i_* and y_marg at j_*) +
+    # Contributions from supports FW/AFW +
     inner = 0.0
     cost_lin = 0.0      # Constant linear coefficient for cost term
     penalty_lin = 0.0   # Constant linear coefficient for R penalty
@@ -426,27 +425,127 @@ def armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
         add_y(AFW_sj, -1.0)
         penalty_lin -= R
 
+    return x_updates, y_updates, inner, cost_lin, penalty_lin
+
+
+'''
+Optimal stepsize for p = 2
+Parameters:
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    cost_lin: linear coefficient for the cost term
+    penalty_lin: linear coefficient for the R penalty
+'''
+def step_trunc_p2_dim2(x_updates, y_updates, cost_lin, penalty_lin):
+    numerator, denominator = cost_lin + penalty_lin, 0.0
+    for x, mu_i, coeff in x_updates.values():
+        numerator   += coeff * (x - 1)
+        denominator -= coeff**2 / mu_i
+    for y, nu_j, coeff in y_updates.values():
+        numerator   += coeff * (y - 1)
+        denominator -= coeff**2 / nu_j
+
+    return numerator / denominator
+
+
+'''
+Optimal stepsize for p = 1
+Parameters:
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    cost_lin: linear coefficient for the cost term
+    penalty_lin: linear coefficient for the R penalty
+'''
+def step_trunc_p1_dim2(x_updates, y_updates, cost_lin, penalty_lin):
+    const, terms_num, terms_den = np.exp(-cost_lin - penalty_lin), [], []
+    constraint = np.inf
+    for x, mu_i, coeff in x_updates.values():
+        # divide in different cases depending on the coefficient
+        if coeff == 2:
+            const *= mu_i**2 / 4
+            terms_num.extend([x * mu_i / 2] * 2)
+        elif coeff == 1:
+            const *= mu_i
+            terms_num.append(x * mu_i)
+        elif coeff == -1:
+            const /= - mu_i
+            terms_den.append(- x * mu_i)
+            constraint = min(constraint, x * mu_i)
+        elif coeff == -2:
+            const /= mu_i**2 / 4
+            terms_den.extend([- x * mu_i / 2] * 2)
+            constraint = min(constraint, x * mu_i / 2)
+    for y, nu_j, coeff in y_updates.values():
+        if coeff == 2:
+            const *= nu_j**2 / 4
+            terms_num.extend([y * nu_j / 2] * 2)
+        elif coeff == 1:
+            const *= nu_j
+            terms_num.append(y * nu_j)
+        elif coeff == -1:
+            const /= - nu_j
+            terms_den.append(- y * nu_j)
+            constraint = min(constraint, y * nu_j)
+        elif coeff == -2:
+            const /= nu_j**2 / 4
+            terms_den.extend([- y * nu_j / 2] * 2)
+            constraint = min(constraint, y * nu_j / 2)
+
+    def comb(terms, k):
+        if k < 0:
+            return 0.0
+        return sum(np.prod(combo) for combo in combinations(terms, k))
+
+    # degree of the polynomial is max of the two sizes
+    deg_num, deg_den = len(terms_num), len(terms_den)
+    deg = max(deg_num, deg_den)
+
+    coeffs = []
+    for k in range(deg + 1):
+        coeff = comb(terms_num, deg_num - deg + k) - const * comb(terms_den, deg_den - deg + k)
+        coeffs.append(coeff)
+
+    roots = np.roots(coeffs)  
+    real_roots = roots[np.isreal(roots)].real
+    step = np.max(real_roots[real_roots <= constraint])
+    
+    return step
+
+
+'''
+Armijo stepsize for truncated UOT
+Parameters:
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    inner: directional derivative <grad, d>
+    cost_lin: linear coefficient for the cost term
+    penalty_lin: linear coefficient for the R penalty
+    p: main parameter
+    theta, beta, gamma: Armijo parameters
+'''
+def armijo_trunc_dim2(x_updates, y_updates, inner, cost_lin, penalty_lin, p, theta=1.0, beta=0.4, gamma=0.5):
     def obj_change(theta_val):
         diff = theta_val * (cost_lin + penalty_lin)
 
         # Entropy changes for x marginals
-        for _, (x, mu_x, coeff) in x_updates.items():
-            d = coeff * theta_val / mu_x
-            diff += (Up(x + d, p) - Up(x, p)) * mu_x
+        for _, (x, mu_i, coeff) in x_updates.items():
+            d = coeff * theta_val / mu_i
+            diff += (Up(x + d, p) - Up(x, p)) * mu_i
 
         # Entropy changes for y marginals
-        for _, (y, nu_y, coeff) in y_updates.items():
-            d = coeff * theta_val / nu_y
-            diff += (Up(y + d, p) - Up(y, p)) * nu_y
+        for _, (y, nu_j, coeff) in y_updates.items():
+            d = coeff * theta_val / nu_j
+            diff += (Up(y + d, p) - Up(y, p)) * nu_j
 
         return diff
 
+    # Backtracking
     diff = obj_change(theta)
     while diff > beta * theta * inner:
+        assert theta > 1e-10, "Armijo stepsize became too small"
+
         theta *= gamma
         diff = obj_change(theta)
-
+    
     return theta
+
 
 '''
 Stepsize calculation
@@ -464,8 +563,16 @@ Parameters:
 def step_calc_trunc_dim2(x_marg, y_marg, grad_x, grad_s, 
                          mu, nu, vk_x, vk_s, s_i, s_j, c_trunc, p, R,
                          theta=1.0, beta=0.4, gamma=0.5):
-    return armijo_trunc_dim2(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s, 
-                             s_i, s_j, c_trunc, p, R, theta=theta, beta=beta, gamma=gamma)
+    
+    x_updates, y_updates, inner, cost_lin, penalty_lin = coord_updates(x_marg, y_marg, grad_x, grad_s, mu, nu, vk_x, vk_s,
+                                                                       s_i, s_j, c_trunc, R)
+    if p == 1:
+        step = min(step_trunc_p1_dim2(x_updates, y_updates, cost_lin, penalty_lin), theta)
+    elif p == 2:
+        step = min(step_trunc_p2_dim2(x_updates, y_updates, cost_lin, penalty_lin), theta)
+    else:
+        step = armijo_trunc_dim2(x_updates, y_updates, inner, cost_lin, penalty_lin, p, theta = theta, beta = beta, gamma = gamma)
+    return step
 
 
 '''

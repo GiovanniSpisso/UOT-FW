@@ -328,7 +328,7 @@ def grad_update_dim2_p2(x_marg, y_marg, grad, FW_full, AFW_full):
             for dj in [-1, 0, 1]:
                 i, j = x1 + di, x2 + dj
                 
-                if not 0 <= i < n and 0 <= j < n:
+                if not (0 <= i < n and 0 <= j < n):
                     continue
                 
                 offset = (y1 - i, y2 - j)
@@ -348,7 +348,7 @@ def grad_update_dim2_p2(x_marg, y_marg, grad, FW_full, AFW_full):
             for dj in [-1, 0, 1]:
                 k, l = y1 + di, y2 + dj
                 
-                if not 0 <= k < n and 0 <= l < n:
+                if not (0 <= k < n and 0 <= l < n):
                     continue
                 
                 offset = (k - x1, l - x2)

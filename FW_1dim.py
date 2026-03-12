@@ -1,4 +1,5 @@
 import numpy as np
+from itertools import combinations # for step_p1
 
 '''
 Power-like entropy function
@@ -162,95 +163,155 @@ def gap_calc(grad_UOT, dir, M, sum_term):
 
 
 '''
-Optimal stepsize (p = 2)
+Function to list the coordinates to update
 Parameters:
-  x_marg, y_marg: X and Y marginals of the transportation plan
-  c: cost function
-  mu, nu: measures
-  i: indices of search direction
+    x_marg, y_marg: X and Y marginals of the transportation plan
+    grad: gradient with respect to the transport plan
+    mu, nu: measures
+    v: (i_FW, j_FW, i_AFW, j_AFW)
+    c: cost function (vector form)
 '''
-def opt_step(x_marg, y_marg, c, mu, nu, i):
-  FW_i, FW_j, AFW_i, AFW_j = i
-  if FW_i == -1:
-    return (c[AFW_i, AFW_j] + y_marg[AFW_j] + x_marg[AFW_i] - 2) / (1/mu[AFW_i] + 1/nu[AFW_j])
-  elif AFW_i == -1:
-    return (2 - c[FW_i, FW_j] - y_marg[FW_j] - x_marg[FW_i]) / (1/mu[FW_i] + 1/nu[FW_j])
-  elif FW_i == AFW_i:
-    return (c[FW_i, AFW_j] - c[FW_i, FW_j] + y_marg[AFW_j] - y_marg[FW_j]) / (1/nu[AFW_j] + 1/nu[FW_j])
-  elif FW_j == AFW_j:
-    return (c[AFW_i, FW_j] - c[FW_i, FW_j] + x_marg[AFW_i] - x_marg[FW_i]) / (1/mu[AFW_i] + 1/mu[FW_i])
-  else:
-    return (c[AFW_i, AFW_j] - c[FW_i, FW_j] + y_marg[AFW_j] - y_marg[FW_j] + x_marg[AFW_i]
-            - x_marg[FW_i]) / (1/mu[AFW_i] + 1/mu[FW_i] + 1/nu[AFW_j] + 1/nu[FW_j])
+def coord_updates(x_marg, y_marg, grad, mu, nu, v, c):
+    FW_ix, FW_jx, AFW_ix, AFW_jx = v
+
+    x_updates = {}  # i -> (a_i, mu_i, coeff) where coeff multiplies theta in delta: delta = coeff * theta
+    y_updates = {}  # j -> (b_j, nu_j, coeff)
+
+    def add_x(i, coeff):
+        if i in x_updates:
+            x0, mu0, coeff0 = x_updates[i]
+            x_updates[i] = (x0, mu0, coeff0 + coeff)
+        else:
+            x = x_marg[i]
+            x_updates[i] = (x, mu[i], coeff)
+
+    def add_y(j, coeff):
+        if j in y_updates:
+            y0, nu0, coeff0 = y_updates[j]
+            y_updates[j] = (y0, nu0, coeff0 + coeff)
+        else:
+            y = y_marg[j]
+            y_updates[j] = (y, nu[j], coeff)
+
+    # Directional derivative <grad, d> + 
+    # Contributions to marginals from x-plan FW/AFW (these affect x_marg at i_* and y_marg at j_*) +
+    # Contributions from supports FW/AFW +
+    inner = 0.0
+    cost_lin = 0.0      # Constant linear coefficient for cost term
+    if FW_ix != -1: 
+        inner += grad[FW_ix, FW_jx]
+        add_x(FW_ix, +1.0)
+        add_y(FW_jx, +1.0)
+        cost_lin += c[FW_ix, FW_jx]
+    if AFW_ix != -1:  
+        inner -= grad[AFW_ix, AFW_jx]
+        add_x(AFW_ix, -1.0)
+        add_y(AFW_jx, -1.0)
+        cost_lin -= c[AFW_ix, AFW_jx]
+
+    return x_updates, y_updates, inner, cost_lin
+
 
 '''
-Armijo stepsize
+Optimal stepsize for p = 2
 Parameters:
-  x_marg, y_marg: X and Y marginals of the transportation plan
-  grad_UOT: gradient of UOT
-  mu, nu: measures
-  v: search direction
-  c: cost function
-  p: main parameter that defines the p-entropy
-  theta, beta, gamma: parameters for the Armijo stepsize
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    cost_lin: linear coefficient for the cost term
 '''
-def armijo(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma = 0.5):
-  # get the indices of the selected FW and AFW vertices
-  FW_i, FW_j, AFW_i, AFW_j = v
+def step_p2(x_updates, y_updates, cost_lin):
+    numerator, denominator = cost_lin, 0.0
+    for x, mu_i, coeff in x_updates.values():
+        numerator   += coeff * (x - 1)
+        denominator -= coeff**2 / mu_i
+    for y, nu_j, coeff in y_updates.values():
+        numerator   += coeff * (y - 1)
+        denominator -= coeff**2 / nu_j
 
-  x_updates = {} 
-  y_updates = {}
+    return numerator / denominator
 
-  def add_x(i, coeff):
-    if i in x_updates:
-        x0, mu0, coeff0 = x_updates[i]
-        x_updates[i] = (x0, mu0, coeff0 + coeff)
-    else:
-        x = x_marg[i]
-        x_updates[i] = (x, mu[i], coeff)
 
-  def add_y(j, coeff):
-    if j in y_updates:
-        y0, nu0, coeff0 = y_updates[j]
-        y_updates[j] = (y0, nu0, coeff0 + coeff)
-    else:
-        y = y_marg[j]
-        y_updates[j] = (y, nu[j], coeff)
+'''
+Optimal stepsize for p = 1
+Parameters:
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    cost_lin: linear coefficient for the cost term
+'''
+def step_p1(x_updates, y_updates, cost_lin):
+    const, terms_num, terms_den = np.exp(-cost_lin), [], []
+    constraint = np.inf
+    for x, mu_i, coeff in x_updates.values():
+        # divide in different cases depending on the coefficient
+        if coeff == 1:
+            const *= mu_i
+            terms_num.append(x * mu_i)
+        elif coeff == -1:
+            const /= - mu_i
+            terms_den.append(- x * mu_i)
+            constraint = min(constraint, x * mu_i)
+    for y, nu_j, coeff in y_updates.values():
+        if coeff == 1:
+            const *= nu_j
+            terms_num.append(y * nu_j)
+        elif coeff == -1:
+            const /= - nu_j
+            terms_den.append(- y * nu_j)
+            constraint = min(constraint, y * nu_j)
 
-  inner = 0
-  cost_lin = 0
-  if FW_i != -1:
-    inner += grad_UOT[FW_i, FW_j]
-    add_x(FW_i, 1)
-    add_y(FW_j, 1)
-    cost_lin += c[FW_i, FW_j]
-  if AFW_i != -1:
-    inner -= grad_UOT[AFW_i, AFW_j]
-    add_x(AFW_i, -1)
-    add_y(AFW_j, -1)
-    cost_lin -= c[AFW_i, AFW_j]
+    def comb(terms, k):
+        if k < 0:
+            return 0.0
+        return sum(np.prod(combo) for combo in combinations(terms, k))
 
-  def obj_change(theta_val):
-    diff = theta_val * cost_lin
+    # degree of the polynomial is max of the two sizes
+    deg_num, deg_den = len(terms_num), len(terms_den)
+    deg = max(deg_num, deg_den)
 
-    # Entropy changes for x marginals
-    for _, (x, mu_i, coeff) in x_updates.items():
-      d = coeff * theta_val / mu_i
-      diff += (Up(x + d, p) - Up(x, p)) * mu_i
+    coeffs = []
+    for k in range(deg + 1):
+        coeff = comb(terms_num, deg_num - deg + k) - const * comb(terms_den, deg_den - deg + k)
+        coeffs.append(coeff)
 
-    # Entropy changes for y marginals
-    for _, (y, nu_j, coeff) in y_updates.items():
-      d = coeff * theta_val / nu_j
-      diff += (Up(y + d, p) - Up(y, p)) * nu_j
-
-    return diff
+    roots = np.roots(coeffs)  
+    real_roots = roots[np.isreal(roots)].real
+    step = np.max(real_roots[real_roots <= constraint])
     
-  diff = obj_change(theta)
-  while diff > beta * theta * inner:
-    theta = gamma * theta
-    diff = obj_change(theta)
+    return step
 
-  return theta
+
+'''
+Armijo stepsize for truncated UOT
+Parameters:
+    x_updates, y_updates: coordinates to update with their current values and coefficients
+    inner: directional derivative <grad, d>
+    cost_lin: linear coefficient for the cost term
+    p: main parameter
+    theta, beta, gamma: Armijo parameters
+'''
+def armijo(x_updates, y_updates, inner, cost_lin, p, theta=1.0, beta=0.4, gamma=0.5):
+    def obj_change(theta_val):
+        diff = theta_val * (cost_lin)
+
+        # Entropy changes for x marginals
+        for _, (x, mu_i, coeff) in x_updates.items():
+            d = coeff * theta_val / mu_i
+            diff += (Up(x + d, p) - Up(x, p)) * mu_i
+
+        # Entropy changes for y marginals
+        for _, (y, nu_j, coeff) in y_updates.items():
+            d = coeff * theta_val / nu_j
+            diff += (Up(y + d, p) - Up(y, p)) * nu_j
+
+        return diff
+
+    # Backtracking
+    diff = obj_change(theta)
+    while diff > beta * theta * inner:
+        assert theta > 1e-10, "Armijo stepsize became too small"
+
+        theta *= gamma
+        diff = obj_change(theta)
+    
+    return theta
 
 
 '''
@@ -264,11 +325,15 @@ Parameters:
   p: main parameter
   theta, beta, gamma: Armijo parameters
 '''
-def step_calc(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = 1, beta = 0.4, gamma = 0.5):
-  if p == 2:
-    return min(opt_step(x_marg, y_marg, c, mu, nu, v), theta)
-  else:
-    return armijo(x_marg, y_marg, grad_UOT, mu, nu, v, c, p, theta = theta, beta = beta, gamma = gamma)
+def step_calc(x_marg, y_marg, grad, mu, nu, v, c, p, theta = 1.0, beta = 0.4, gamma = 0.5):
+    x_updates, y_updates, inner, cost_lin = coord_updates(x_marg, y_marg, grad, mu, nu, v, c)
+    if p == 1:
+        step = min(step_p1(x_updates, y_updates, cost_lin), theta)
+    elif p == 2:
+        step = min(step_p2(x_updates, y_updates, cost_lin), theta)
+    else:
+        step = armijo(x_updates, y_updates, inner, cost_lin, p, theta = theta, beta = beta, gamma = gamma)
+    return step
 
 
 '''

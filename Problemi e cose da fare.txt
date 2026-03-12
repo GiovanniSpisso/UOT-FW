@@ -1,9 +1,14 @@
-1.  Per p particolari si può migliorare max_step
-    Togli M da input delle funzioni
-    Ho messo in Up(0) = 10000 e ho ancora dUp(0) = 0... 
+1.  Ho messo in Up(0) = 10000 e ho ancora dUp(0) = 0. 
+    2 opzioni: cambio 10000 con piano_iter0 oppure rimetto 1 ora che abbiamo la opt_stepsize (da verificare tutto funzioni bene)
     (in 1dim, 2dim Trunc, 1dim, 2dim) come correggere definitivamente?
-    OT.unbalanced functions: ho provato solve_sample (ok), sinkhorn_unbalanced (hmm), lbfgsb_unbalanced (hmm)
+    OT.unbalanced functions: solve_sample (ok), 
+                             solve (ok)
+                             sinkhorn (ok), 
+                             sinkhorn_translation_invariant (ok),
+                             lbfgsb_unbalanced (p=1 e p=2 NO ok),
+                             mm_unbalanced (p=1 ok, p=2 NO ok)
     Metti assert nel codice!
+    Per p particolari si può migliorare max_step
     Confronto con gradiente proiettato (p=2)
 
     CAPIRE: R... come meglio prenderlo? Sembra che una via di mezzo sia la cosa migliore...

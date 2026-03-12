@@ -16,10 +16,6 @@ def Up(x, p):
         result = np.ones_like(x, dtype=float)
         mask_nonzero = (x > 0)
         result[mask_nonzero] = x[mask_nonzero] * np.log(x[mask_nonzero]) - x[mask_nonzero] + 1
-    elif p == 0:
-        result = np.ones_like(x, dtype=float)
-        mask_nonzero = (x > 0)
-        result[mask_nonzero] = x[mask_nonzero] - 1 - np.log(x[mask_nonzero])
     else:
         result = (x**p - p * (x - 1) - 1) / (p * (p - 1))
     
